@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DBHandler {
-    String path;
+    private String path;
 
     private Connection connect() {
         Connection conn = null;
@@ -38,7 +38,13 @@ public class DBHandler {
     }
 
     DBHandler() {
-        this.path = System.getProperty("user.dir") + "\\bot.db";
+        if (System.getProperty("os.name").contains("Windows")) {
+            this.path = System.getProperty("user.dir") + "\\bot.db";
+        }
+        else {
+            this.path = System.getProperty("user.dir") + "/bot.db";
+        }
+
         init();
     }
 
@@ -299,7 +305,7 @@ public class DBHandler {
             s_getA.setLong(1, guildID);
 
             ResultSet rs = s_getA.executeQuery();
-            while (rs.next()) {
+            if (rs.next()) {
                 return rs.getLong("announce_channel");
             }
         }
@@ -322,7 +328,7 @@ public class DBHandler {
         }
     }
 
-    public void updateChannelForGuild(Long guildID, Long channelID, String channelName, Integer live, Long postID, String title, String game, Integer offline_flag) {
+    void updateChannelForGuild(Long guildID, Long channelID, String channelName, Integer live, Long postID, String title, String game, Integer offline_flag) {
         try (Connection conn = connect()) {
             String table_name = "g" + guildID;
             PreparedStatement s_updC = conn.prepareStatement("UPDATE " + table_name + " SET name = ?, live = ?, post_id = ?, title = ?, game = ?, offline_flag = ? WHERE channel_id = ?");
@@ -426,9 +432,9 @@ public class DBHandler {
         }
     }
 
-    public void deleteTableForGuild(IGuild guild) {
+    private void deleteTableForGuild(Long guildID) {
         try (Connection conn = connect()) {
-            String table_name = "g" + guild.getLongID();
+            String table_name = "g" + guildID;
             PreparedStatement s_delG = conn.prepareStatement("DROP TABLE " + table_name);
 
             s_delG.execute();
@@ -438,10 +444,10 @@ public class DBHandler {
         }
     }
 
-    public void deleteGuild(IGuild guild) {
+    private void deleteGuild(Long guildID) {
         try (Connection conn = connect()) {
             PreparedStatement s_delG = conn.prepareStatement("DELETE FROM guilds WHERE id = ?");
-            s_delG.setLong(1, guild.getLongID());
+            s_delG.setLong(1, guildID);
 
             s_delG.execute();
         }
@@ -450,8 +456,8 @@ public class DBHandler {
         }
     }
 
-    public void removeGuild(IGuild guild) {
-        deleteGuild(guild);
-        deleteTableForGuild(guild);
+    public void removeGuild(Long guildID) {
+        deleteGuild(guildID);
+        deleteTableForGuild(guildID);
     }
 }

@@ -14,36 +14,56 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class StreamAnnouncer {
-    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    List<GuildStructure> allChannels;
+    private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private List<GuildStructure> allChannels;
 
-    public StreamAnnouncer(List<GuildStructure> allChannels) {
+    StreamAnnouncer(List<GuildStructure> allChannels) {
         this.allChannels = allChannels;
 
         scheduler.scheduleAtFixedRate(() -> {
             announceStreams();
-        }, 0L,1L, TimeUnit.MINUTES);
+        }, 1L,1L, TimeUnit.MINUTES);
 
     }
 
-    public void announceStreams() {
+    private void announceStreams() {
         for (GuildStructure g : allChannels) {
             IChannel announce_channel = Lembot.getDiscordClient().getChannelByID(g.getAnnounce_channel());
             List<ChannelEndpoint> channelsToBeAdded = g.getChannelsToBeAdded();
             List<ChannelDels> channelsToBeRemoved = g.getChannelsToBeRemoved();
+            List<String> gamesToBeAdded = g.getGamesToBeAdded();
+            List<String> gamesToBeRemoved = g.getGamesToBeRemoved();
 
-            if (!channelsToBeAdded.isEmpty()) {
-                for (ChannelEndpoint ce : channelsToBeAdded) {
-                    g.addTwitch_channels(new ChannelDels(ce.getChannelId(), ce.getChannel().getName(), false, null, ce.getChannel().getStatus(), ce.getChannel().getGame(), 0, ce));
+            try {
+                if (!channelsToBeAdded.isEmpty()) {
+                    for (ChannelEndpoint ce : channelsToBeAdded) {
+                        g.addTwitch_channels(new ChannelDels(ce.getChannelId(), ce.getChannel().getName(), false, null, ce.getChannel().getStatus(), ce.getChannel().getGame(), 0, ce));
+                    }
                     g.setChannelsToBeAdded(new ArrayList<>());
                 }
-            }
-            if (!channelsToBeRemoved.isEmpty()) {
-                for (ChannelDels cd : channelsToBeRemoved) {
-                    g.removeTwitch_channels(cd);
+                if (!channelsToBeRemoved.isEmpty()) {
+                    for (ChannelDels cd : channelsToBeRemoved) {
+                        g.removeTwitch_channels(cd);
+                    }
                     g.setChannelsToBeRemoved(new ArrayList<>());
                 }
+                if (!gamesToBeAdded.isEmpty()) {
+                    for (String s : gamesToBeAdded) {
+                        g.addGameFilter(s);
+                    }
+                    g.setGamesToBeAdded(new ArrayList<>());
+                }
+                if (!gamesToBeRemoved.isEmpty()) {
+                    for (String s : gamesToBeRemoved) {
+                        g.removeGame_filter(s);
+                    }
+                    g.setGamesToBeRemoved(new ArrayList<>());
+                }
             }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
             List<String> games = gamesLowerCase(g.getGame_filters());
@@ -75,6 +95,7 @@ public class StreamAnnouncer {
                                 cd.setOffline_flag(0);
                             }
                         } catch (Exception e) {
+                            System.out.println("Problem with " + c.getName());
                             streamEndpoint = Lembot.getTwitchClient().getStreamEndpoint();
                             e.printStackTrace();
                         }
@@ -147,7 +168,7 @@ public class StreamAnnouncer {
         },0,1, TimeUnit.MINUTES);
     }
 
-    public List<String> gamesLowerCase(List<String> games) {
+    private List<String> gamesLowerCase(List<String> games) {
         List<String> resultingGames = new ArrayList<>();
 
         for (String g : games) {

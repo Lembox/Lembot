@@ -20,19 +20,18 @@ import sx.blah.discord.api.ClientBuilder;
 import sx.blah.discord.api.IDiscordClient;
 import sx.blah.discord.api.events.EventDispatcher;
 import sx.blah.discord.handle.obj.IChannel;
+import sx.blah.discord.handle.obj.IGuild;
 import sx.blah.discord.util.DiscordException;
 import sx.blah.discord.util.RateLimitException;
 import sx.blah.discord.util.RequestBuffer;
 
-import javax.validation.constraints.Null;
-
 public class Lembot {
-    static TwitchClient twitchClient;
-    static IDiscordClient discordClient;
+    private static TwitchClient twitchClient;
+    private static IDiscordClient discordClient;
 
-    static DBHandler dbHandler;
-    static List<GuildStructure> allChannels = new ArrayList<>();
-    static StreamAnnouncer announcer;
+    private static DBHandler dbHandler;
+    private static List<GuildStructure> allChannels = new ArrayList<>();
+    private static StreamAnnouncer announcer;
 
     public Lembot() {
         Properties properties = new Properties();
@@ -43,28 +42,6 @@ public class Lembot {
         }
         catch (IOException e) {
             e.printStackTrace();
-        }
-
-        twitchClient = TwitchClientBuilder.init()
-                .withClientId(properties.get("twitch_clientID").toString())
-                .withClientSecret(properties.get("twitch_clientSecret").toString())
-                .withAutoSaveConfiguration(true)
-                .withConfigurationDirectory(new File("config"))
-                .withCredential(properties.get("twitch_oauth").toString()) // Get your token at: https://twitchapps.com/tmi/
-                .connect();
-
-        try {
-            discordClient = new ClientBuilder()
-                    .withToken(properties.get("discord_token").toString())
-                    .login();
-
-            EventDispatcher dispatcher = discordClient.getDispatcher();
-            dispatcher.registerListener(new GuildHandler());
-            dispatcher.registerListener(new MessageHandler());
-            dispatcher.registerListener(new DiscordHandler());
-        }
-        catch (DiscordException de) {
-            de.printStackTrace();
         }
 
         try {
@@ -81,6 +58,28 @@ public class Lembot {
             dbHandler = new DBHandler();
         }
 
+        try {
+            discordClient = new ClientBuilder()
+                    .withToken(properties.get("discord_token").toString())
+                    .login();
+
+            EventDispatcher dispatcher = discordClient.getDispatcher();
+            dispatcher.registerListener(new GuildHandler());
+            dispatcher.registerListener(new MessageHandler());
+            dispatcher.registerListener(new DiscordHandler());
+        }
+        catch (DiscordException de) {
+            de.printStackTrace();
+        }
+
+        twitchClient = TwitchClientBuilder.init()
+                .withClientId(properties.get("twitch_clientID").toString())
+                .withClientSecret(properties.get("twitch_clientSecret").toString())
+                .withAutoSaveConfiguration(true)
+                .withConfigurationDirectory(new File("config"))
+                .withCredential(properties.get("twitch_oauth").toString()) // Get your token at: https://twitchapps.com/tmi/
+                .connect();
+
         init();
 
         announcer = new StreamAnnouncer(allChannels);
@@ -89,25 +88,39 @@ public class Lembot {
     private void init() {
         // Read necessary information from DB
         List<Long[]> guilds = dbHandler.getGuilds();
+        List<IGuild> connected_guilds = discordClient.getGuilds();
         Long guildID;
         Long announce_channel;
         List<ChannelDels> twitch_channels = new ArrayList<>();
         List<String> gameFilters = new ArrayList<>();
 
+        List<Long> connected_guildIDs = new ArrayList<>();
+
+        for (IGuild iGuild : connected_guilds) {
+            connected_guildIDs.add(iGuild.getLongID());
+        }
+
         for (Long[] g : guilds) {
             guildID = g[0];
             announce_channel = g[1];
-            twitch_channels.addAll(dbHandler.getChannelsForGuild(guildID));
 
-            for (ChannelDels cd : twitch_channels) {
-                ChannelEndpoint channelEndpoint = twitchClient.getChannelEndpoint(cd.getChannelID());
-                cd.setChannelEndpoint(channelEndpoint);
+            if (!connected_guildIDs.contains(guildID)) {
+                Lembot.getDbHandler().removeGuild(guildID);
+                Lembot.removeGuildStructure(guildID);
             }
+            else {
+                twitch_channels.addAll(dbHandler.getChannelsForGuild(guildID));
 
-            gameFilters.addAll(dbHandler.getGamesForGuild(guildID));
+                for (ChannelDels cd : twitch_channels) {
+                    ChannelEndpoint channelEndpoint = twitchClient.getChannelEndpoint(cd.getChannelID());
+                    cd.setChannelEndpoint(channelEndpoint);
+                }
 
-            GuildStructure guildStructure = new GuildStructure(guildID, twitch_channels, gameFilters, announce_channel);
-            allChannels.add(guildStructure);
+                gameFilters.addAll(dbHandler.getGamesForGuild(guildID));
+
+                GuildStructure guildStructure = new GuildStructure(guildID, twitch_channels, gameFilters, announce_channel);
+                allChannels.add(guildStructure);
+            }
         }
     }
 
@@ -217,4 +230,5 @@ public class Lembot {
         }
         allChannels.remove(guildStructure);
     }
+
 }

@@ -7,13 +7,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GuildStructure {
-    Long guild_id;
-    List<ChannelDels> twitch_channels;
-    List<String> game_filters;
-    List<ChannelEndpoint> channelsToBeAdded = new ArrayList<>();
-    List<ChannelDels> channelsToBeRemoved = new ArrayList<>();
-    Long announce_channel;
-    Boolean cleanup = false;
+    private Long guild_id;
+    private List<ChannelDels> twitch_channels;
+    private List<String> game_filters;
+    private List<ChannelEndpoint> channelsToBeAdded = new ArrayList<>();
+    private List<ChannelDels> channelsToBeRemoved = new ArrayList<>();
+    private List<String> gamesToBeAdded = new ArrayList<>();
+    private List<String> gamesToBeRemoved = new ArrayList<>();
+    private Long announce_channel;
+    private Boolean cleanup = false;
 
     public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel) {
         this.guild_id = guild_id;
@@ -116,5 +118,29 @@ public class GuildStructure {
 
     public void setCleanup(Boolean cleanup) {
         this.cleanup = cleanup;
+    }
+
+    public void addGameToBeAdded(String game) {
+        this.gamesToBeAdded.add(game);
+    }
+
+    public void addGameToBeRemoved(String game) {
+        this.gamesToBeRemoved.add(game);
+    }
+
+    public List<String> getGamesToBeAdded() {
+        return gamesToBeAdded;
+    }
+
+    public List<String> getGamesToBeRemoved() {
+        return gamesToBeRemoved;
+    }
+
+    public void setGamesToBeAdded(List<String> gamesToBeAdded) {
+        this.gamesToBeAdded = gamesToBeAdded;
+    }
+
+    public void setGamesToBeRemoved(List<String> gamesToBeRemoved) {
+        this.gamesToBeRemoved = gamesToBeRemoved;
     }
 }
