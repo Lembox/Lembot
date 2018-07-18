@@ -26,5 +26,6 @@ all commands are maintainer-only
 |!twitch_add channelName/channelID*    |  adds new Twitch channels to be announced (during the next check cycle)
 |!twitch_remove channelName/channelID*    |                      removes  Twitch channels
 |!twitch_channels           |             lists all the Twitch channels
+|!cleanup                   | if activated announcement messages of offline streams are deleted and if deactivated announcement messages are edited|
 
 Commands noted with an * can also take multiple arguments split by a "|", e.g. "!twitch_add channel1|channel2" adds channel1 and channel2.
