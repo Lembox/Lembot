@@ -1,4 +1,4 @@
-package core;
+import core.Lembot;
 
 public class Main {
     public static void main(String[] args) {

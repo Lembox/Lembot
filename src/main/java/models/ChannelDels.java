@@ -3,16 +3,14 @@ package models;
 import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
 
 public class ChannelDels {
-    Long channelID;
-    String name;
-    Boolean live;
-    Long postID;
-    String title;
-    String game;
-    Integer offline_flag;       // offline-flag to give streamers 3 minutes time to reconnect before announcing again
-    ChannelEndpoint channelEndpoint;
-
-    public ChannelDels() { }
+    private Long channelID;
+    private String name;
+    private Boolean live;
+    private Long postID;
+    private String title;
+    private String game;
+    private Integer offline_flag;       // offline-flag to give streamers 3 minutes time to reconnect before announcing again
+    private ChannelEndpoint channelEndpoint;
 
     public ChannelDels(Long channelID, String name, Boolean live, Long postID, String title, String game, Integer offline_flag) {
         this.channelID = channelID;

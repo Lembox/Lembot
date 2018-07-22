@@ -1,27 +1,36 @@
 package models;
 
+import core.StreamAnnouncer;
+
 import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
 import me.philippheuer.twitch4j.model.Channel;
 
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class GuildStructure {
     private Long guild_id;
     private List<ChannelDels> twitch_channels;
     private List<String> game_filters;
-    private List<ChannelEndpoint> channelsToBeAdded = new ArrayList<>();
-    private List<ChannelDels> channelsToBeRemoved = new ArrayList<>();
-    private List<String> gamesToBeAdded = new ArrayList<>();
-    private List<String> gamesToBeRemoved = new ArrayList<>();
     private Long announce_channel;
-    private Boolean cleanup = false;
+    private Boolean cleanup;
+    private Integer message_style;
+    private StreamAnnouncer announcer;
 
-    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel) {
+    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel) {     // for new guilds
         this.guild_id = guild_id;
         this.twitch_channels = twitch_channels;
         this.game_filters = game_filters;
         this.announce_channel = announce_channel;
+        this.cleanup = false;
+        this.message_style = 1;
+    }
+
+    public GuildStructure(Long guild_id, Long announce_channel, Boolean cleanup, Integer message_style) {       // necessary for DB reads
+        this.guild_id = guild_id;
+        this.announce_channel = announce_channel;
+        this.cleanup = cleanup;
+        this.message_style = message_style;
     }
 
     public Long getGuild_id() {
@@ -34,14 +43,6 @@ public class GuildStructure {
 
     public List<ChannelDels> getTwitch_channels() {
         return twitch_channels;
-    }
-
-    public void addTwitch_channels(ChannelDels channelDels) {
-        twitch_channels.add(channelDels);
-    }
-
-    public void removeTwitch_channels(ChannelDels channelDels) {
-        twitch_channels.remove(channelDels);
     }
 
     public void setTwitch_channels(List<ChannelDels> twitch_channels) {
@@ -60,56 +61,27 @@ public class GuildStructure {
         return game_filters;
     }
 
-    public void addGame_filter(String game) {
-        game_filters.add(game);
-    }
-
-    public void removeGame_filter(String game) {
-        game_filters.remove(game);
-    }
-
     public void setGame_filters(List<String> game_filters) {
         this.game_filters = game_filters;
-    }
-
-    public List<ChannelEndpoint> getChannelsToBeAdded() {
-        return channelsToBeAdded;
-    }
-
-    public void addChannelToBeAdded(ChannelEndpoint newChannel) { channelsToBeAdded.add(newChannel); }
-
-
-    public List<ChannelDels> getChannelsToBeRemoved() {
-        return channelsToBeRemoved;
     }
 
     public void addChannel(ChannelEndpoint channelEndpoint) {
         Channel c = channelEndpoint.getChannel();
         twitch_channels.add(new ChannelDels(channelEndpoint.getChannelId(), c.getName(), false, null, c.getStatus(), c.getGame(), 0, channelEndpoint));
+        sortChannels();
     }
 
     public void removeChannel(ChannelDels channelDels) {
         twitch_channels.remove(channelDels);
     }
 
-    public void addChannelToBeRemoved(ChannelDels newChannel) {
-        channelsToBeRemoved.add(newChannel);
-    }
-
     public void addGameFilter(String game) {
         game_filters.add(game);
+        sortGames();
     }
 
     public void removeGameFilter(String game) {
         game_filters.remove(game);
-    }
-
-    public void setChannelsToBeAdded(List<ChannelEndpoint> channelsToBeAdded) {
-        this.channelsToBeAdded = channelsToBeAdded;
-    }
-
-    public void setChannelsToBeRemoved(List<ChannelDels> channelsToBeRemoved) {
-        this.channelsToBeRemoved = channelsToBeRemoved;
     }
 
     public Boolean getCleanup() {
@@ -120,27 +92,36 @@ public class GuildStructure {
         this.cleanup = cleanup;
     }
 
-    public void addGameToBeAdded(String game) {
-        this.gamesToBeAdded.add(game);
+    public StreamAnnouncer getAnnouncer() {
+        return announcer;
     }
 
-    public void addGameToBeRemoved(String game) {
-        this.gamesToBeRemoved.add(game);
+    public void setAnnouncer(StreamAnnouncer announcer) {
+        this.announcer = announcer;
     }
 
-    public List<String> getGamesToBeAdded() {
-        return gamesToBeAdded;
+    public Integer getMessage_style() {
+        return message_style;
     }
 
-    public List<String> getGamesToBeRemoved() {
-        return gamesToBeRemoved;
+    public void setMessage_style(Integer message_style) {
+        this.message_style = message_style;
     }
 
-    public void setGamesToBeAdded(List<String> gamesToBeAdded) {
-        this.gamesToBeAdded = gamesToBeAdded;
+    private void sortGames() {
+        game_filters.sort(String.CASE_INSENSITIVE_ORDER);
     }
 
-    public void setGamesToBeRemoved(List<String> gamesToBeRemoved) {
-        this.gamesToBeRemoved = gamesToBeRemoved;
+    private void sortChannels() {
+        twitch_channels.sort(new ChannelComparator());
+    }
+
+    private static class ChannelComparator implements Comparator<ChannelDels>
+    {
+        public int compare(ChannelDels c1, ChannelDels c2)
+        {
+            return c1.getName().compareTo(c2.getName());
+        }
     }
 }
+
