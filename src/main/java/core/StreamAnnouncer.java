@@ -68,7 +68,13 @@ public class StreamAnnouncer {
                 if (!cd.getLive()) {
                     try {
                         if ((streamEndpoint.isLive(c) && games.contains(toLowerCase(c.getGame()))) || (streamEndpoint.isLive(c) && games.isEmpty())) {
-                            Long id = (g.getMessage_style().equals(0)) ? sendClassicMessage(announce_channel, c.getName(), c.getGame(), c.getStatus()) : sendEmbedMessage(announce_channel, c.getName(), c.getGame(), c.getStatus(), c.getLogo());
+                            Long id;
+                            if (g.getMessage_style().equals(0)) {
+                                id = sendClassicMessage(announce_channel, c.getName(), c.getGame(), c.getStatus());
+                            }
+                            else {
+                                id = sendEmbedMessage(announce_channel, c.getName(), c.getGame(), c.getStatus(), c.getLogo());
+                            }
                             // if message could not be posted (missing permissions) then it will try again on the next cycle
                             if (id != null) {
                                 // Write to DB in case bot has to go offline and save to local variables
@@ -289,6 +295,11 @@ public class StreamAnnouncer {
     }
 
     private String toLowerCase(String input) {
-        return (input == null) ? null : input.toLowerCase();
+        if (input == null) {
+            return null;
+        }
+        else {
+            return input.toLowerCase();
+        }
     }
 }

@@ -7,7 +7,7 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         Lembot bot = new Lembot();
 
-        String input = scanner.next();
+        String input = scanner.nextLine();
         if (input.equals("q")) {
             bot.announceOfftime();
             System.exit(-9);

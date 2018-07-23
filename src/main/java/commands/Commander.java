@@ -14,6 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.springframework.web.client.RestTemplate;
 
+import sx.blah.discord.api.internal.json.objects.EmbedObject;
 import sx.blah.discord.handle.obj.IChannel;
 import sx.blah.discord.handle.obj.IGuild;
 import sx.blah.discord.handle.obj.IMessage;
@@ -89,8 +90,20 @@ public class Commander {
                     builder.withAuthorIcon(discordIcon);
 
                     builder.appendField("Announcement channel", "<#" + guildStructure.getAnnounce_channel() + ">", true);
-                    builder.appendField("Message cleanup", (guildStructure.getCleanup()) ? "activated" : "deactivated", true);
-                    builder.appendField("Message style", (guildStructure.getMessage_style().equals(0)) ? "classic" : "embedded", true);
+
+                    if (guildStructure.getCleanup()) {
+                        builder.appendField("Message cleanup", "activated", true);
+                    }
+                    else {
+                        builder.appendField("Message cleanup", "deactivated", true);
+                    }
+
+                    if (guildStructure.getMessage_style().equals(0)) {
+                        builder.appendField("Message style", "classic", true);
+                    }
+                    else {
+                        builder.appendField("Message style", "embedded", true);
+                    }
 
                     builder.withColor(114,137,218);
 
@@ -145,81 +158,103 @@ public class Commander {
                 case "game_add":
                     if (!command[1].equals("")) {
                         if (command[1].contains("|")) {
+                            StringBuilder gameAdd = new StringBuilder();
                             String[] games = command[1].split("\\|");
 
                             for (String game : games) {
-                                add_game(game, guildStructure, message);
+                                if (!game.equals("")) {
+                                    if (gameAdd.length() > 1500) {
+                                        Lembot.sendMessage(channel, gameAdd.toString());
+                                        gameAdd = new StringBuilder();
+                                    }
+                                    gameAdd.append(add_game(game, guildStructure, message)).append("\n");
+                                }
                             }
+
+                            Lembot.sendMessage(channel, gameAdd.toString());
                         } else {
-                            add_game(command[1], guildStructure, message);
+                            Lembot.sendMessage(channel, add_game(command[1], guildStructure, message));
                         }
                     } else {
-                        message.getChannel().sendMessage("Use the command properly");
+                        Lembot.sendMessage(channel, "Use the command properly");
                     }
                     break;
                 case "game_remove":
                     if (!command[1].equals("")) {
                         if (command[1].contains("|")) {
                             String[] games = command[1].split("\\|");
+                            StringBuilder gameRem = new StringBuilder();
 
                             for (String game : games) {
-                                remove_game(game, guildStructure, message);
+                                if (!game.equals("")) {
+                                    if (gameRem.length() > 1500) {
+                                        Lembot.sendMessage(channel, gameRem.toString());
+                                        gameRem = new StringBuilder();
+                                    }
+                                    gameRem.append(remove_game(game, guildStructure, message)).append("\n");
+                                }
                             }
+
+                            Lembot.sendMessage(channel, gameRem.toString());
                         } else {
-                            remove_game(command[1], guildStructure, message);
+                            Lembot.sendMessage(channel, remove_game(command[1], guildStructure, message));
                         }
                     } else {
-                        message.getChannel().sendMessage("Use the command properly");
+                        Lembot.sendMessage(channel, "Use the command properly");
                     }
                     break;
                 case "game_filters":
-                    try {
-                        guildStructure.getAnnouncer().getStreamSemaphore().acquire();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-
+                    Integer gameParts = 1;     // message splits
                     StringBuilder gameNames = new StringBuilder();
                     StringBuilder gameIDs = new StringBuilder();
-                    List<String> gameFilters = guildStructure.getGame_filters();
+                    List<String> gameFilters = Lembot.getDbHandler().getGamesForGuild(guild.getLongID());
 
                     if (gameFilters.isEmpty()) {
                         Lembot.sendMessage(channel, "No game filters have been set up yet");
                     }
                     else {
-                        EmbedBuilder builder2 = new EmbedBuilder();
-
                         for (String game : gameFilters) {
+                            if (gameNames.length() + gameIDs.length() > 900) {
+                                gameParts++;
+                                Lembot.sendMessage(channel, buildGameList(gameNames.toString(), gameIDs.toString(), guild.getName(), gameParts));
+                                gameNames = new StringBuilder();
+                                gameIDs = new StringBuilder();
+                            }
                             gameNames.append(game).append("\n");
 
                             String gameID = getGameID(game);
-                            gameIDs.append((gameID == null) ? "no directory on Twitch" : gameID).append("\n");
-
+                            if (gameID == null) {
+                                gameIDs.append("no directory on Twitch");
+                            }
+                            else {
+                                gameIDs.append(gameID).append("\n");
+                            }
                         }
-
-                        builder2.withAuthorName("Game filter list for " + guild.getName());
-                        builder2.withAuthorUrl(githubLink);
-                        builder2.withAuthorIcon(twitchIcon);
-                        builder2.appendField("Game", gameNames.toString(), true);
-                        builder2.appendField("ID", gameIDs.toString(), true);
-                        builder2.withColor(100, 65, 164);
-                        builder2.withThumbnail(Lembot.getDiscordClient().getApplicationIconURL());
-
-                        Lembot.sendMessage(channel, builder2.build());
+                        if (gameParts > 1) {
+                            gameParts++;
+                        }
+                        Lembot.sendMessage(channel, buildGameList(gameNames.toString(), gameIDs.toString(), guild.getName(), gameParts));
                     }
-
-                    guildStructure.getAnnouncer().getStreamSemaphore().release();
                     break;
                 case "twitch_add":
                     if (!command[1].equals("")) {
                         if (command[1].contains("|")) {
+                            StringBuilder channelAdd = new StringBuilder();
                             String[] channels = command[1].split("\\|");
 
                             for (String s : channels) {
-                                add_channel(s, guildStructure, message);
+                                if (!s.equals("")) {
+                                    if (channelAdd.length() > 1500) {
+                                        Lembot.sendMessage(channel, channelAdd.toString());
+                                        channelAdd = new StringBuilder();
+                                    }
+                                    channelAdd.append(add_channel(s, guildStructure, message)).append("\n");
+                                }
                             }
+
+                            Lembot.sendMessage(channel, channelAdd.toString());
                         } else {
-                            add_channel(command[1], guildStructure, message);
+                            Lembot.sendMessage(channel, add_channel(command[1], guildStructure, message));
                         }
                     } else {
                         Lembot.sendMessage(channel, "Use the command properly");
@@ -228,50 +263,54 @@ public class Commander {
                 case "twitch_remove":
                     if (!command[1].equals("")) {
                         if (command[1].contains("|")) {
+                            StringBuilder channelRem = new StringBuilder();
                             String[] channels = command[1].split("\\|");
 
                             for (String s : channels) {
-                                remove_channel(s, guildStructure, message);
+                                if (!s.equals("")) {
+                                    if (channelRem.length() > 1500) {
+                                        Lembot.sendMessage(channel, channelRem.toString());
+                                        channelRem = new StringBuilder();
+                                    }
+                                    channelRem.append(remove_channel(s, guildStructure, message)).append("\n");
+                                }
                             }
+
+                            Lembot.sendMessage(channel, channelRem.toString());
                         } else {
-                            remove_channel(command[1], guildStructure, message);
+                            Lembot.sendMessage(channel, remove_channel(command[1], guildStructure, message));
                         }
                     } else {
                         Lembot.sendMessage(channel, "Use the command properly");
                     }
                     break;
                 case "twitch_channels":
-                    try {
-                        guildStructure.getAnnouncer().getStreamSemaphore().acquire();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    Integer channelParts = 1;
                     StringBuilder channelNames = new StringBuilder();
                     StringBuilder channelIDs = new StringBuilder();
 
-                    List<ChannelDels> twitch_channels = guildStructure.getTwitch_channels();
+                    List<ChannelDels> twitch_channels = Lembot.getDbHandler().getChannelsForGuild(guild.getLongID());
 
                     if (twitch_channels.isEmpty()) {
                         Lembot.sendMessage(channel, "No channels have been added yet.");
                     }
                     else {
                         for (ChannelDels cd : twitch_channels) {
+                            if (channelNames.length() + channelIDs.length() > 900) {
+                                channelParts++;
+                                Lembot.sendMessage(channel, buildChannelList(channelNames.toString(), channelIDs.toString(), guild.getName(), channelParts));
+                                channelNames = new StringBuilder();
+                                channelIDs = new StringBuilder();
+                            }
+
                             channelNames.append("[").append(cd.getName()).append("](https://twitch.tv/").append(cd.getName()).append(")\n");
-                            channelIDs.append(cd.getChannelEndpoint().getChannelId()).append("\n");
+                            channelIDs.append(cd.getChannelID()).append("\n");
                         }
-                        builder = new EmbedBuilder();
-
-                        builder.withAuthorName("Channel list for " + guild.getName());
-                        builder.withAuthorUrl(githubLink);
-                        builder.withAuthorIcon(twitchIcon);
-                        builder.appendField("Channel", channelNames.toString(), true);
-                        builder.appendField("ID", channelIDs.toString(), true);
-                        builder.withColor(100, 65, 164);
-                        builder.withThumbnail(Lembot.getDiscordClient().getApplicationIconURL());
-
-                        Lembot.sendMessage(channel, builder.build());
+                        if (channelParts > 1) {
+                            channelParts++;
+                        }
+                        Lembot.sendMessage(channel, buildChannelList(channelNames.toString(), channelIDs.toString(), guild.getName(), channelParts));
                     }
-                    guildStructure.getAnnouncer().getStreamSemaphore().release();
                     break;
                 case "cleanup":
                     Boolean result = Lembot.getDbHandler().updateCleanup(guild.getLongID());
@@ -311,9 +350,18 @@ public class Commander {
                     StringBuilder sb_channels = new StringBuilder();
 
                     for (String s : raw_games) {
+                        if (sb_games.length() > 1500) {
+                            Lembot.sendMessage(channel, "games: " + sb_games.toString());
+                            sb_games = new StringBuilder();
+                        }
+
                         sb_games.append(s).append("|");
                     }
                     for (ChannelDels cd : raw_channels) {
+                        if (sb_channels.length() > 1500) {
+                            Lembot.sendMessage(channel, "games: " + sb_channels.toString());
+                            sb_channels = new StringBuilder();
+                        }
                         sb_channels.append(cd.getName()).append("|");
                     }
 
@@ -334,8 +382,7 @@ public class Commander {
         }
     }
 
-    private static void add_channel(String channel, GuildStructure guildStructure, IMessage message) {
-        IChannel text_channel = message.getChannel();
+    private static String add_channel(String channel, GuildStructure guildStructure, IMessage message) {
         Semaphore semaphore = guildStructure.getAnnouncer().getStreamSemaphore();
 
         if(StringUtils.isNumeric(channel)) {
@@ -352,14 +399,14 @@ public class Commander {
                     }
                     guildStructure.addChannel(ce);
                     semaphore.release();
-                    text_channel.sendMessage("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
+                    return ("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
                 }
                 else {
-                    text_channel.sendMessage("Channel " + ce.getChannel().getName() +  " has been already added");
+                    return ("Channel " + ce.getChannel().getName() +  " has been already added");
                 }
             }
             catch (Exception e) {
-                text_channel.sendMessage("Something went wrong");
+                return ("Something went wrong");
             }
         }
         else {
@@ -376,20 +423,19 @@ public class Commander {
                     }
                     guildStructure.addChannel(ce);
                     semaphore.release();
-                    text_channel.sendMessage("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
+                    return ("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
                 }
                 else {
-                    text_channel.sendMessage("Channel " + ce.getChannel().getName() +  " has already been added");
+                    return ("Channel " + ce.getChannel().getName() +  " has already been added");
                 }
             }
             catch (Exception e) {
-                text_channel.sendMessage("Something went wrong");
+                return ("Something went wrong");
             }
         }
     }
 
-    private static void remove_channel(String channel, GuildStructure guildStructure, IMessage message) {
-        IChannel text_channel = message.getChannel();
+    private static String remove_channel(String channel, GuildStructure guildStructure, IMessage message) {
         Semaphore semaphore = guildStructure.getAnnouncer().getStreamSemaphore();
 
         if(StringUtils.isNumeric(channel)) {
@@ -408,14 +454,14 @@ public class Commander {
                     guildStructure.removeChannel(cd);
                     semaphore.release();
                     Lembot.getDbHandler().deleteChannelForGuild(message, cd.getChannelID());
-                    Lembot.sendMessage(text_channel, "Channel " + cd.getChannelEndpoint().getChannel().getName() + "with ID: " + cd.getChannelID() + " will be removed");
+                    return ("Channel " + cd.getChannelEndpoint().getChannel().getName() + "with ID: " + cd.getChannelID() + " will be removed");
                 }
                 else {
-                    Lembot.sendMessage(text_channel,"Channel with the ID: " + channel + " has already been removed or has never been added");
+                    return ("Channel with the ID: " + channel + " has already been removed or has never been added");
                 }
             }
             catch (Exception e) {
-                Lembot.sendMessage(text_channel,"Something went wrong");
+                return ("Something went wrong with " + channel);
             }
         }
         else {
@@ -434,21 +480,19 @@ public class Commander {
                     guildStructure.removeChannel(cd);
                     semaphore.release();
                     Lembot.getDbHandler().deleteChannelForGuild(message, cd.getChannelID());
-                    Lembot.sendMessage(text_channel,"Channel " + cd.getChannelEndpoint().getChannel().getName() + " with ID: " + cd.getChannelID() + " will be removed");
+                    return ("Channel " + cd.getChannelEndpoint().getChannel().getName() + " with ID: " + cd.getChannelID() + " will be removed");
                 }
                 else {
-                    Lembot.sendMessage(text_channel,"Channel with name: " + channel + " has already been removed");
+                    return ("Channel with name: " + channel + " has already been removed");
                 }
             }
             catch (Exception e) {
-                Lembot.sendMessage(text_channel,"Something went wrong");
+                return ("Something went wrong with " + channel);
             }
         }
     }
 
-    private static void add_game(String game, GuildStructure guildStructure, IMessage message) {
-        IChannel channel = message.getChannel();
-
+    private static String add_game(String game, GuildStructure guildStructure, IMessage message) {
         try {
             guildStructure.getAnnouncer().getStreamSemaphore().acquire();
         } catch (InterruptedException e) {
@@ -458,22 +502,21 @@ public class Commander {
         List<String> gameFilters = guildStructure.getGame_filters();
 
         if (gameFilters.contains(game)) {
-            Lembot.sendMessage(channel, "A filter for " + game + " has already been set up");
+            guildStructure.getAnnouncer().getStreamSemaphore().release();
+            return ("A filter for " + game + " has already been set up");
         } else {
             Lembot.getDbHandler().addGameForGuild(message, game);
-            Lembot.sendMessage(channel, "A filter for " + game + " will be added");
+            String response = "A filter for " + game + " will be added";
             guildStructure.addGameFilter(game);
             if (getGameID(game) == null) {
-                Lembot.sendMessage(channel, "Beware that a directory for the game " + game + " hasn't been added on Twitch yet. See here for more information on how to add it: https://help.twitch.tv/customer/en/portal/articles/2348988-adding-a-game-and-box-art-to-the-directory");
+                response += "\nBeware that a directory for the game " + game + " hasn't been added on Twitch yet. See here for more information on how to add it: https://help.twitch.tv/customer/en/portal/articles/2348988-adding-a-game-and-box-art-to-the-directory";
             }
+            guildStructure.getAnnouncer().getStreamSemaphore().release();
+            return response;
         }
-
-        guildStructure.getAnnouncer().getStreamSemaphore().release();
     }
 
-    private static void remove_game(String game, GuildStructure guildStructure, IMessage message) {
-        IChannel channel = message.getChannel();
-
+    private static String remove_game(String game, GuildStructure guildStructure, IMessage message) {
         try {
             guildStructure.getAnnouncer().getStreamSemaphore().acquire();
         } catch (InterruptedException e) {
@@ -483,14 +526,14 @@ public class Commander {
         List<String> gameFilters = guildStructure.getGame_filters();
 
         if (!gameFilters.contains(game)) {
-            Lembot.sendMessage(channel, "A filter for " + game + " hasn't been set up");
+            guildStructure.getAnnouncer().getStreamSemaphore().release();
+            return ("A filter for " + game + " hasn't been set up");
         } else {
             Lembot.getDbHandler().deleteGameForGuild(message, game);
-            Lembot.sendMessage(channel, "The filter for " + game + " will be removed");
+            guildStructure.getAnnouncer().getStreamSemaphore().release();
             guildStructure.removeGameFilter(game);
+            return ("The filter for " + game + " will be removed");
         }
-
-        guildStructure.getAnnouncer().getStreamSemaphore().release();
     }
 
     private static Boolean checkIfChannelEndpointWithIDAlreadyThere(GuildStructure guildStructure, Long channelID) {
@@ -551,7 +594,12 @@ public class Commander {
 
         try {
             List<models.Game> games = restTemplate.getForObject(url, Games.class).getGames();
-            return (games.isEmpty()) ? null : games.get(0).getId();
+            if (games.isEmpty()) {
+                return null;
+            }
+            else {
+                return games.get(0).getId();
+            }
         }
         catch (RestException restException) {
             restException.printStackTrace();
@@ -559,4 +607,46 @@ public class Commander {
 
         return null;
     }
+
+    private static EmbedObject buildGameList(String gameNames, String gameIDs, String guildName, Integer partNumber) {
+        EmbedBuilder builder = new EmbedBuilder();
+
+        if (partNumber > 1) {
+            builder.withAuthorName("Game filter list (pt. " + (partNumber - 1) + ") for " + guildName);
+        }
+        else {
+            builder.withAuthorName("Game filter list for " + guildName);
+        }
+
+        builder.withAuthorUrl(githubLink);
+        builder.withAuthorIcon(twitchIcon);
+        builder.appendField("Game", gameNames, true);
+        builder.appendField("ID", gameIDs, true);
+        builder.withColor(100, 65, 164);
+        builder.withThumbnail(Lembot.getDiscordClient().getApplicationIconURL());
+
+
+        return builder.build();
+    }
+
+    private static EmbedObject buildChannelList(String channelNames, String channelIDs, String guildName, Integer partNumber) {
+        EmbedBuilder builder = new EmbedBuilder();
+
+        if (partNumber > 1) {
+            builder.withAuthorName("Channel list (pt. " + (partNumber - 1) + ") for " + guildName);
+        }
+        else {
+            builder.withAuthorName("Channel list for " + guildName);
+        }
+
+        builder.withAuthorUrl(githubLink);
+        builder.withAuthorIcon(twitchIcon);
+        builder.appendField("Channel", channelNames, true);
+        builder.appendField("ID", channelIDs, true);
+        builder.withColor(100, 65, 164);
+        builder.withThumbnail(Lembot.getDiscordClient().getApplicationIconURL());
+
+        return builder.build();
+    }
+
 }

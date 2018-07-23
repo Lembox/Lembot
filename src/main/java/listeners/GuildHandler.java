@@ -74,7 +74,11 @@ public class GuildHandler {
     public void onGuildUnavailable(GuildUnavailableEvent event) {
         IGuild guild = event.getGuild();
 
-        Lembot.getLogger().error("Guild {} with name {} is unavailable", guild.getLongID(), guild.getName());
+        try {
+            Lembot.getLogger().error("Guild {} with name {} is unavailable", guild.getLongID(), guild.getName());
+        } catch (NullPointerException npe) {
+            Lembot.getLogger().error("A guild is unavailable", npe);
+        }
     }
 
     @EventSubscriber

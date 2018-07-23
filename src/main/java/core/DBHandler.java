@@ -327,7 +327,7 @@ public class DBHandler {
         }
     }
 
-    List<ChannelDels> getChannelsForGuild(Long guildID) {
+    public List<ChannelDels> getChannelsForGuild(Long guildID) {
         List<ChannelDels> result = new ArrayList<>();
 
         try (Connection conn = connect()) {
@@ -348,7 +348,7 @@ public class DBHandler {
         return result;
     }
 
-    List<String> getGamesForGuild(Long guildID) {
+    public List<String> getGamesForGuild(Long guildID) {
         List<String> result = new ArrayList<>();
 
         try (Connection conn = connect()) {
