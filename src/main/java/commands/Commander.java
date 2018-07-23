@@ -4,6 +4,7 @@ import core.Lembot;
 
 import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
 import me.philippheuer.twitch4j.exceptions.RestException;
+import me.philippheuer.twitch4j.model.Channel;
 import me.philippheuer.util.rest.HeaderRequestInterceptor;
 
 import models.ChannelDels;
@@ -15,12 +16,15 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import sx.blah.discord.api.internal.json.objects.EmbedObject;
+import sx.blah.discord.handle.impl.obj.ReactionEmoji;
 import sx.blah.discord.handle.obj.IChannel;
 import sx.blah.discord.handle.obj.IGuild;
 import sx.blah.discord.handle.obj.IMessage;
 import sx.blah.discord.handle.obj.IUser;
 import sx.blah.discord.util.DiscordException;
 import sx.blah.discord.util.EmbedBuilder;
+import sx.blah.discord.util.MissingPermissionsException;
+import sx.blah.discord.util.RequestBuffer;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -41,7 +45,17 @@ public class Commander {
 
         if (Lembot.getDbHandler().isMaintainer(message)) {
 
-            Lembot.getLogger().info("Command {} is used by {} in guild {}", command[0], sender.getName(), guild.getLongID());
+            Lembot.getLogger().info("Command {} is used by {} in guild {} (id: {})", command[0], sender.getName(), guild.getName(), guild.getLongID());
+
+            try {
+                ReactionEmoji reaction = ReactionEmoji.of("\uD83D\uDC4C");
+                RequestBuffer.request(() -> {
+                    message.addReaction(reaction);
+                });
+            }
+            catch (MissingPermissionsException mpe) {
+                Lembot.getLogger().error("Reaction to command {} used in guild {} (id: {}) couldn't be added", command[0], guild.getName(), guild.getLongID(), mpe);
+            }
 
             switch (command[0]) {
                 case "init":
@@ -224,7 +238,7 @@ public class Commander {
 
                             String gameID = getGameID(game);
                             if (gameID == null) {
-                                gameIDs.append("no directory on Twitch");
+                                gameIDs.append("no directory on Twitch").append("\n");
                             }
                             else {
                                 gameIDs.append(gameID).append("\n");
@@ -337,14 +351,8 @@ public class Commander {
                     Lembot.sendMessage(channel, "The stream announcer has been shutdown");
                     break;
                 case "raw_data":        // outputs filtered channels and games to easily copy them -> bot change or similar
-                    try {
-                        guildStructure.getAnnouncer().getStreamSemaphore().acquire();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-
-                    List<String> raw_games = guildStructure.getGame_filters();
-                    List<ChannelDels> raw_channels = guildStructure.getTwitch_channels();
+                    List<String> raw_games = Lembot.getDbHandler().getGamesForGuild(guild.getLongID());
+                    List<ChannelDels> raw_channels = Lembot.getDbHandler().getChannelsForGuild(guild.getLongID());
 
                     StringBuilder sb_games = new StringBuilder();
                     StringBuilder sb_channels = new StringBuilder();
@@ -366,8 +374,6 @@ public class Commander {
                     }
 
                     Lembot.sendMessage(channel, "games: " + sb_games.toString() + "\nchannels: " + sb_channels.toString());
-
-                    guildStructure.getAnnouncer().getStreamSemaphore().release();
                     break;
                 case "help":
                 case "commands":
@@ -388,48 +394,52 @@ public class Commander {
         if(StringUtils.isNumeric(channel)) {
             // assuming input is ChannelID
             try {
-                ChannelEndpoint ce = Lembot.getTwitchClient().getChannelEndpoint(Long.parseLong(channel));
-                if (!checkIfChannelEndpointWithIDAlreadyThere(guildStructure, Long.parseLong(channel))) {
-                    Lembot.getDbHandler().addChannelForGuild(message, ce.getChannelId(), ce.getChannel().getName());
+                ChannelEndpoint ce = Lembot.getTwitchClient().getChannelEndpoint();
+                Channel c = ce.getChannel(Long.parseLong(channel));
+                if (!checkIfChannelIDAlreadyThere(guildStructure, Long.parseLong(channel))) {
+                    Lembot.getDbHandler().addChannelForGuild(message, c.getId(), c.getName());
                     try {
                         semaphore.acquire();
                     }
                     catch (Exception e) {
                         e.printStackTrace();
                     }
-                    guildStructure.addChannel(ce);
+                    guildStructure.addChannel(c);
                     semaphore.release();
-                    return ("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
+                    return ("Channel " + c.getName() + " with ID: " + c.getId() + " will be added");
                 }
                 else {
-                    return ("Channel " + ce.getChannel().getName() +  " has been already added");
+                    return ("Channel " + c.getName() +  " has been already added");
                 }
             }
             catch (Exception e) {
+                e.printStackTrace();
                 return ("Something went wrong");
             }
         }
         else {
             // assuming input is ChannelName
             try {
-                ChannelEndpoint ce = Lembot.getTwitchClient().getChannelEndpoint(channel.toLowerCase());
-                if (!checkIfChannelEndpointWithIDAlreadyThere(guildStructure, ce.getChannelId())) {
-                    Lembot.getDbHandler().addChannelForGuild(message, ce.getChannelId(), ce.getChannel().getName());
+                ChannelEndpoint ce = Lembot.getTwitchClient().getChannelEndpoint();
+                Channel c = ce.getChannel(channel);
+                if (!checkIfChannelIDAlreadyThere(guildStructure, c.getId())) {
+                    Lembot.getDbHandler().addChannelForGuild(message, c.getId(), c.getName());
                     try {
                         semaphore.acquire();
                     }
                     catch (Exception e) {
                         e.printStackTrace();
                     }
-                    guildStructure.addChannel(ce);
+                    guildStructure.addChannel(c);
                     semaphore.release();
-                    return ("Channel " + ce.getChannel().getName() + " with ID: " + ce.getChannelId() + " will be added");
+                    return ("Channel " + c.getName() + " with ID: " + c.getId() + " will be added");
                 }
                 else {
-                    return ("Channel " + ce.getChannel().getName() +  " has already been added");
+                    return ("Channel " + c.getName() +  " has already been added");
                 }
             }
             catch (Exception e) {
+                e.printStackTrace();
                 return ("Something went wrong");
             }
         }
@@ -443,9 +453,6 @@ public class Commander {
             try {
                 ChannelDels cd = findChannelDelsWithIDAlreadyThere(guildStructure, Long.parseLong(channel));
                 if (cd != null) {
-                    if (cd.getPostID() != null) {
-                        Lembot.deleteMessage(Lembot.getDiscordClient().getChannelByID(guildStructure.getAnnounce_channel()), cd.getPostID());
-                    }
                     try {
                         semaphore.acquire();
                     } catch (InterruptedException e) {
@@ -453,8 +460,9 @@ public class Commander {
                     }
                     guildStructure.removeChannel(cd);
                     semaphore.release();
-                    Lembot.getDbHandler().deleteChannelForGuild(message, cd.getChannelID());
-                    return ("Channel " + cd.getChannelEndpoint().getChannel().getName() + "with ID: " + cd.getChannelID() + " will be removed");
+                    Lembot.getDbHandler().deleteChannelForGuild(message.getGuild(), cd.getChannelID());
+
+                    return ("Channel " + cd.getName() + "with ID: " + cd.getChannelID() + " will be removed");
                 }
                 else {
                     return ("Channel with the ID: " + channel + " has already been removed or has never been added");
@@ -469,9 +477,6 @@ public class Commander {
             try {
                 ChannelDels cd = findChannelDelsWithIDAlreadyThere(guildStructure, channel.toLowerCase());
                 if (cd != null) {
-                    if (cd.getPostID() != null) {
-                        Lembot.deleteMessage(Lembot.getDiscordClient().getChannelByID(guildStructure.getAnnounce_channel()), cd.getPostID());
-                    }
                     try {
                         semaphore.acquire();
                     } catch (InterruptedException e) {
@@ -479,8 +484,8 @@ public class Commander {
                     }
                     guildStructure.removeChannel(cd);
                     semaphore.release();
-                    Lembot.getDbHandler().deleteChannelForGuild(message, cd.getChannelID());
-                    return ("Channel " + cd.getChannelEndpoint().getChannel().getName() + " with ID: " + cd.getChannelID() + " will be removed");
+                    Lembot.getDbHandler().deleteChannelForGuild(message.getGuild(), cd.getChannelID());
+                    return ("Channel " + cd.getName() + " with ID: " + cd.getChannelID() + " will be removed");
                 }
                 else {
                     return ("Channel with name: " + channel + " has already been removed");
@@ -505,7 +510,7 @@ public class Commander {
             guildStructure.getAnnouncer().getStreamSemaphore().release();
             return ("A filter for " + game + " has already been set up");
         } else {
-            Lembot.getDbHandler().addGameForGuild(message, game);
+            Lembot.getDbHandler().addGameForGuild(message.getGuild(), game);
             String response = "A filter for " + game + " will be added";
             guildStructure.addGameFilter(game);
             if (getGameID(game) == null) {
@@ -529,14 +534,14 @@ public class Commander {
             guildStructure.getAnnouncer().getStreamSemaphore().release();
             return ("A filter for " + game + " hasn't been set up");
         } else {
-            Lembot.getDbHandler().deleteGameForGuild(message, game);
+            Lembot.getDbHandler().deleteGameForGuild(message.getGuild(), game);
             guildStructure.getAnnouncer().getStreamSemaphore().release();
             guildStructure.removeGameFilter(game);
             return ("The filter for " + game + " will be removed");
         }
     }
 
-    private static Boolean checkIfChannelEndpointWithIDAlreadyThere(GuildStructure guildStructure, Long channelID) {
+    private static Boolean checkIfChannelIDAlreadyThere(GuildStructure guildStructure, Long channelID) {
         List<ChannelDels> twitch_channels = guildStructure.getTwitch_channels();
 
         for (ChannelDels cd : twitch_channels) {
@@ -562,7 +567,7 @@ public class Commander {
         List<ChannelDels> twitch_channels = guildStructure.getTwitch_channels();
 
         for (ChannelDels cd : twitch_channels) {
-            if (cd.getChannelEndpoint().getChannel().getName().equals(channelName)) {
+            if (cd.getName().equals(channelName)) {
                 return cd;
             }
         }

@@ -367,9 +367,7 @@ public class DBHandler {
         return result;
     }
 
-    public void addGameForGuild(IMessage message, String game) {
-        IGuild guild = message.getGuild();
-
+    public void addGameForGuild(IGuild guild, String game) {
         try (Connection conn = connect()) {
             PreparedStatement s_addG = conn.prepareStatement("INSERT INTO games VALUES(?, ?)");
             s_addG.setLong(1, guild.getLongID());
@@ -382,9 +380,7 @@ public class DBHandler {
         }
     }
 
-    public void deleteGameForGuild(IMessage message, String game) {
-        IGuild guild = message.getGuild();
-
+    public void deleteGameForGuild(IGuild guild, String game) {
         try (Connection conn = connect()) {
             PreparedStatement s_delG = conn.prepareStatement("DELETE FROM games WHERE guild_id = ? AND game = ?");
             s_delG.setLong(1, guild.getLongID());
@@ -397,9 +393,7 @@ public class DBHandler {
         }
     }
 
-    public void deleteChannelForGuild(IMessage message, Long channelID) {
-        IGuild guild = message.getGuild();
-
+    public void deleteChannelForGuild(IGuild guild, Long channelID) {
         try (Connection conn = connect()) {
             String table_name = "g" + guild.getLongID();
             PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?");

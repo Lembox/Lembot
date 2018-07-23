@@ -8,7 +8,6 @@ import listeners.MessageHandler;
 
 import me.philippheuer.twitch4j.TwitchClientBuilder;
 import me.philippheuer.twitch4j.TwitchClient;
-import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
 
 import sx.blah.discord.api.ClientBuilder;
 import sx.blah.discord.api.IDiscordClient;
@@ -83,7 +82,7 @@ public class Lembot {
                 .withClientId(properties.get("twitch_clientID").toString())
                 .withClientSecret(properties.get("twitch_clientSecret").toString())
                 .withAutoSaveConfiguration(true)
-                .withConfigurationDirectory(new File("config"))
+                //            .withConfigurationDirectory(new File("config"))        //   Twitch4J v0.11.1 goes havoc with it
                 .withCredential(properties.get("twitch_oauth").toString()) // Get your token at: https://twitchapps.com/tmi/
                 .connect();
 
@@ -120,10 +119,6 @@ public class Lembot {
             }
             else {
                 twitch_channels = new ArrayList<>(dbHandler.getChannelsForGuild(guildID));
-                for (ChannelDels cd : twitch_channels) {
-                    ChannelEndpoint channelEndpoint = twitchClient.getChannelEndpoint(cd.getChannelID());
-                    cd.setChannelEndpoint(channelEndpoint);
-                }
                 gameFilters = new ArrayList<>(dbHandler.getGamesForGuild(guildID));
 
                 g.setGame_filters(gameFilters);

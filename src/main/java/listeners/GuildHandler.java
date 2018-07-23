@@ -14,6 +14,7 @@ import sx.blah.discord.handle.impl.events.guild.channel.ChannelDeleteEvent;
 import sx.blah.discord.handle.obj.IGuild;
 import sx.blah.discord.handle.obj.IPrivateChannel;
 import sx.blah.discord.util.DiscordException;
+import sx.blah.discord.util.MissingPermissionsException;
 
 import java.util.ArrayList;
 
@@ -40,10 +41,10 @@ public class GuildHandler {
             Lembot.addGuildStructure(guildStructure);
 
             try {
-                guild.getDefaultChannel().sendMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init for more information");
+                Lembot.sendMessage(guild.getDefaultChannel(), "Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init for more information");
             }
-            catch (DiscordException de) {
-                Lembot.getLogger().error("Error occured while joining guild {}", guildID, de);
+            catch (DiscordException | MissingPermissionsException e) {
+                Lembot.getLogger().error("Error occured while joining guild {}", guildID, e);
                 IPrivateChannel privateChannelToOwner = Lembot.getDiscordClient().getOrCreatePMChannel(Lembot.getDiscordClient().fetchUser(guild.getOwnerLongID()));
                 privateChannelToOwner.sendMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init in the server/guild for more information");
             }

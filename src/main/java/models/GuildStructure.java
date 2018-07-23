@@ -65,9 +65,8 @@ public class GuildStructure {
         this.game_filters = game_filters;
     }
 
-    public void addChannel(ChannelEndpoint channelEndpoint) {
-        Channel c = channelEndpoint.getChannel();
-        twitch_channels.add(new ChannelDels(channelEndpoint.getChannelId(), c.getName(), false, null, c.getStatus(), c.getGame(), 0, channelEndpoint));
+    public void addChannel(Channel c) {
+        twitch_channels.add(new ChannelDels(c.getId(), c.getName(), false, null, c.getStatus(), c.getGame(), 0));
         sortChannels();
     }
 
@@ -116,7 +115,7 @@ public class GuildStructure {
         twitch_channels.sort(new ChannelComparator());
     }
 
-    private static class ChannelComparator implements Comparator<ChannelDels>
+    private class ChannelComparator implements Comparator<ChannelDels>
     {
         public int compare(ChannelDels c1, ChannelDels c2)
         {
