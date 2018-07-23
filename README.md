@@ -3,8 +3,8 @@ A bot for Discord guilds/servers based on the open source libraries [Twitch4J](h
 
 ## Setup:
 
-- Use my set up bot and let it join your server: https://discordapp.com/api/oauth2/authorize?client_id=468507312622141440&permissions=257024&scope=bot (problems with Discord's implementation of reCAPTCHA that may prevent the bot from joining your server/guild on first try are possible, you have to retry sometimes).
-- Be sure to leave the permissions as they are to assure no missing permissions errors and if you want to restrict the to read through other channels, do so after the bot has joined and made you go through the initialization setup.
+- Use my set up bot and let it join your server: https://discordapp.com/api/oauth2/authorize?client_id=468507312622141440&permissions=486464&scope=bot (problems with Discord's implementation of reCAPTCHA that may prevent the bot from joining your server/guild on first try are possible, you have to retry sometimes).
+- Be sure to leave the permissions as they are to assure no missing permissions errors. Keep in mind that those still might occur for some reason, so guarantee that the bot can read, send and manage messages, read the message history, embed links, add reactions and external emojis in the channels you want it to announce or respond to commands. Do so if you don't see a welcome message in your default channel after inviting the bot.
 - Set it up using the commands below.
 
 If you want to wipe all the data of the bot (Twitch channels and game filters), just kick the bot and let it join again. 
@@ -41,3 +41,5 @@ Commands noted with an * can also take multiple arguments split by a "|", e.g. "
 
 - enable to only follow games and thus announcing all streams that stream the followed games (as new mode?)
 - adding Twitch channels that have been linked by Discord users in the respective guilds/servers (unfortunately the Discord API doesn't offer an access to user profiles from a bot account)
+- improve performance of the raw_data command by making it access the DB directly instead of memory
+- improve performance of the stream announcer which takes roughly 0.7s per channel to check its status (possible limitation of Twitch4J?)
