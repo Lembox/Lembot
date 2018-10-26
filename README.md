@@ -15,7 +15,7 @@ Beware, this bot is currently in beta and errors may occur. Feel free to submit 
 
 all commands (except the addition or removal of maintainers) can be used by maintainers
 
-| command        | behaviour    |     
+| command        |   behaviour    |
 | ------------- |:-------------|
 |!init|initializes the bot, recommended after joining a new server/guild |
 |!set_announce #channel|sets the announcement channel, default channel #general|
@@ -25,11 +25,11 @@ all commands (except the addition or removal of maintainers) can be used by main
 |!maintainer_add @user|adds a new maintainer (owner-only command) |
 |!maintainer_remove @user|removes a maintainer (owner-only command)|
 |!maintainers|lists maintainers |
-|!game_add gameName* |adds  new game filters (same name as on Twitch) to only select streams streaming one of those games|
-|!game_remove gameName*|removes game filters|
+|!game_add* gameName |adds  new game filters (same name as on Twitch) to only select streams streaming one of those games|
+|!game_remove* gameName|removes game filters|
 |!game_filters|lists game filters|
-|!twitch_add channelName/channelID*|adds new Twitch channels to be announced|
-|!twitch_remove channelName/channelID*|removes  Twitch channels|
+|!twitch_add* channelName/channelID|adds new Twitch channels to be announced|
+|!twitch_remove* channelName/channelID|removes  Twitch channels|
 |!twitch_channels|lists all the Twitch channels|
 |!shutdown|shuts down the stream announcer in your server/guild (only recommend when problems occur)|
 |!restart|restarts the stream announcer in your server/guild (only recommend when problems occur)|
@@ -41,5 +41,3 @@ Commands noted with an * can also take multiple arguments split by a "|", e.g. "
 
 - enable to only follow games and thus announcing all streams that stream the followed games (as new mode?)
 - adding Twitch channels that have been linked by Discord users in the respective guilds/servers (unfortunately the Discord API doesn't offer an access to user profiles from a bot account)
-- improve performance of the raw_data command by making it access the DB directly instead of memory
-- improve performance of the stream announcer which takes roughly 0.7s per channel to check its status (possible limitation of Twitch4J?)

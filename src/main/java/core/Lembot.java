@@ -1,5 +1,7 @@
 package core;
 
+import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
+import me.philippheuer.twitch4j.endpoints.StreamEndpoint;
 import models.ChannelDels;
 import models.GuildStructure;
 import listeners.DiscordHandler;
@@ -32,15 +34,18 @@ import java.util.Properties;
 import java.util.concurrent.Semaphore;
 
 public class Lembot {
-    private static TwitchClient twitchClient;
-    private static IDiscordClient discordClient;
+    private TwitchClient twitchClient;
+    private IDiscordClient discordClient;
 
-    private static Logger logger = LoggerFactory.getLogger(Lembot.class);
+    private ChannelEndpoint channelEndpoint;
+    private StreamEndpoint streamEndpoint;
 
-    private static DBHandler dbHandler;
-    private static List<GuildStructure> allChannels = new ArrayList<>();
+    private Logger logger = LoggerFactory.getLogger(Lembot.class);
 
-    private static Semaphore guildSemaphore = new Semaphore(1);     // concurrent access on guild structures
+    private DBHandler dbHandler;
+    private List<GuildStructure> allChannels = new ArrayList<>();
+
+    private Semaphore guildSemaphore = new Semaphore(1);     // concurrent access on guild structures
 
     public Lembot() {
         Properties properties = new Properties();
@@ -61,7 +66,6 @@ public class Lembot {
         }
 
         dbHandler = new DBHandler(db_path);
-
         try {
             discordClient = new ClientBuilder()
                     .withToken(properties.get("discord_token").toString())
@@ -70,9 +74,9 @@ public class Lembot {
                     .login();
 
             EventDispatcher dispatcher = discordClient.getDispatcher();
-            dispatcher.registerListener(new GuildHandler());
-            dispatcher.registerListener(new MessageHandler());
-            dispatcher.registerListener(new DiscordHandler());
+            dispatcher.registerListener(new GuildHandler(this));
+            dispatcher.registerListener(new MessageHandler(this));
+            dispatcher.registerListener(new DiscordHandler(this));
         }
         catch (DiscordException de) {
             logger.error("Discord client could not be set up", de);
@@ -82,14 +86,12 @@ public class Lembot {
                 .withClientId(properties.get("twitch_clientID").toString())
                 .withClientSecret(properties.get("twitch_clientSecret").toString())
                 .withAutoSaveConfiguration(true)
-                //            .withConfigurationDirectory(new File("config"))        //   Twitch4J v0.11.1 goes havoc with it
-                .withCredential(properties.get("twitch_oauth").toString()) // Get your token at: https://twitchapps.com/tmi/
-                .connect();
-
-        init();
+                .withConfigurationDirectory(new File("config"))
+                .withCredential(properties.get("twitch_oauth").toString())
+                .build();
     }
 
-    private void init() {
+    public void init() {
         // Read necessary information from DB
         List<GuildStructure> guilds = dbHandler.getGuilds();
         List<IGuild> connected_guilds = discordClient.getGuilds();
@@ -114,8 +116,8 @@ public class Lembot {
 
             // if bot was kicked during an offline period
             if (!connected_guildIDs.contains(guildID)) {
-                Lembot.getDbHandler().removeGuild(guildID);
-                Lembot.removeGuildStructure(guildID);
+                dbHandler.removeGuild(guildID);
+                removeGuildStructure(guildID);
             }
             else {
                 twitch_channels = new ArrayList<>(dbHandler.getChannelsForGuild(guildID));
@@ -123,6 +125,7 @@ public class Lembot {
 
                 g.setGame_filters(gameFilters);
                 g.setTwitch_channels(twitch_channels);
+                g.setLembot(this);
                 g.setAnnouncer(new StreamAnnouncer(g));
                 allChannels.add(g);
             }
@@ -130,22 +133,45 @@ public class Lembot {
 
         guildSemaphore.release();
 
+        while (channelEndpoint == null) {
+            try {
+                channelEndpoint = twitchClient.getChannelEndpoint();
+            } catch (Exception e) {
+                logger.warn("Channel Endpoint Exception occured", e);
+            }
+
+        }
+        while (streamEndpoint == null) {
+            try {
+                streamEndpoint = twitchClient.getStreamEndpoint();
+            } catch (Exception e) {
+                logger.warn("Stream Endpoint Exception occured", e);
+            }
+        }
         logger.info("Guilds reinitialized");
     }
 
-    public static TwitchClient getTwitchClient() {
+    public ChannelEndpoint getChannelEndpoint() {
+        return channelEndpoint;
+    }
+
+    public StreamEndpoint getStreamEndpoint() {
+        return streamEndpoint;
+    }
+
+    public TwitchClient getTwitchClient() {
         return twitchClient;
     }
 
-    public static IDiscordClient getDiscordClient() {
+    public IDiscordClient getDiscordClient() {
         return discordClient;
     }
 
-    public static DBHandler getDbHandler() {
+    public DBHandler getDbHandler() {
         return dbHandler;
     }
 
-    public static void addGuildStructure(GuildStructure guildStructure) {
+    public void addGuildStructure(GuildStructure guildStructure) {
         try {
             guildSemaphore.acquire();
         }
@@ -156,7 +182,7 @@ public class Lembot {
         guildSemaphore.release();
     }
 
-    public static GuildStructure provideGuildStructure(Long guildID) {
+    public GuildStructure provideGuildStructure(Long guildID) {
         try {
             guildSemaphore.acquire();
         } catch (InterruptedException e) {
@@ -173,7 +199,7 @@ public class Lembot {
         return null;
     }
 
-    public static void sendMessage(IChannel channel, String message) {
+    public void sendMessage(IChannel channel, String message) {
         RequestBuffer.request(() -> {
             try{
                 channel.sendMessage(message);
@@ -186,7 +212,7 @@ public class Lembot {
         });
     }
 
-    public static void sendMessage(IChannel channel, EmbedObject message) {
+    public void sendMessage(IChannel channel, EmbedObject message) {
         RequestBuffer.request(() -> {
             try{
                 channel.sendMessage(message);
@@ -199,7 +225,7 @@ public class Lembot {
         });
     }
 
-    public static Long sendMessageID(IChannel channel, EmbedObject message) {
+    public Long sendMessageID(IChannel channel, EmbedObject message) {
         RequestBuffer.RequestFuture<Long> id = RequestBuffer.request(() -> {
             try{
                 return channel.sendMessage(message).getLongID();
@@ -214,7 +240,7 @@ public class Lembot {
         return id.get();
     }
 
-    public static Long sendMessageID(IChannel channel, String message) {
+    public Long sendMessageID(IChannel channel, String message) {
         RequestBuffer.RequestFuture<Long> id = RequestBuffer.request(() -> {
             try{
                 return channel.sendMessage(message).getLongID();
@@ -229,7 +255,7 @@ public class Lembot {
         return id.get();
     }
 
-    public static void editMessage(IChannel channel, Long messageID, EmbedObject message) {
+    public void editMessage(IChannel channel, Long messageID, EmbedObject message) {
         RequestBuffer.request(() -> {
             try {
                 try {
@@ -254,7 +280,7 @@ public class Lembot {
         });
     }
 
-    public static void editMessage(IChannel channel, Long messageID, String message) {
+    public void editMessage(IChannel channel, Long messageID, String message) {
         RequestBuffer.request(() -> {
             try {
                 try {
@@ -276,7 +302,7 @@ public class Lembot {
         });
     }
 
-    public static void deleteMessage(IChannel channel, Long messageID) {
+    public void deleteMessage(IChannel channel, Long messageID) {
         RequestBuffer.request(() -> {
             try {
                 try {
@@ -300,7 +326,7 @@ public class Lembot {
         });
     }
 
-    public static void removeGuildStructure(Long guildID) {
+    public void removeGuildStructure(Long guildID) {
         try {
             guildSemaphore.acquire();
         } catch (InterruptedException e) {
@@ -325,7 +351,7 @@ public class Lembot {
         guildSemaphore.release();
     }
 
-    public static void announceOfftime() {
+    public void announceOfftime() {
         try {
             guildSemaphore.acquire();
         } catch (InterruptedException e) {
@@ -354,14 +380,14 @@ public class Lembot {
         guildSemaphore.release();
     }
 
-    public static void forceShutdown() {
+    public void forceShutdown() {
         for (GuildStructure g : allChannels) {
             g.getAnnouncer().shutdownScheduler();
         }
         guildSemaphore = new Semaphore(1);
     }
 
-    public static void restartAfterOutage() {
+    public void restartAfterOutage() {
         try {
             guildSemaphore.acquire();
         } catch (InterruptedException e) {
@@ -374,5 +400,5 @@ public class Lembot {
         guildSemaphore.release();
     }
 
-    public static Logger getLogger() { return logger; }
+    public Logger getLogger() { return logger; }
 }

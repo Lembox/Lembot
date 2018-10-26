@@ -7,13 +7,13 @@
         <slf4j.version>1.7.25</slf4j.version>
         <logback.version>1.2.3</logback.version>
         <discord4j.version>2.10.1</discord4j.version>
-        <twitch4j.version>v0.11.1</twitch4j.version>
+        <twitch4j.version>v0.12.0</twitch4j.version>
         <sqlite-jdbc.version>3.23.1</sqlite-jdbc.version>
     </properties>
 
     <groupId>Lembot</groupId>
     <artifactId>Lembot</artifactId>
-    <version>0.5</version>
+    <version>0.8</version>
     <build>
         <plugins>
             <plugin>
@@ -40,7 +40,7 @@
         </dependency>
         <dependency>
             <groupId>com.github.twitch4j</groupId>
-            <artifactId>twitch4j</artifactId>
+            <artifactId>Twitch4J</artifactId>
             <version>${twitch4j.version}</version>
         </dependency>
         <dependency>

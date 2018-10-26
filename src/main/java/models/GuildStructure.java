@@ -1,8 +1,8 @@
 package models;
 
+import core.Lembot;
 import core.StreamAnnouncer;
 
-import me.philippheuer.twitch4j.endpoints.ChannelEndpoint;
 import me.philippheuer.twitch4j.model.Channel;
 
 import java.util.Comparator;
@@ -16,14 +16,16 @@ public class GuildStructure {
     private Boolean cleanup;
     private Integer message_style;
     private StreamAnnouncer announcer;
+    private Lembot lembot;
 
-    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel) {     // for new guilds
+    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel, Lembot lembot) {     // for new guilds
         this.guild_id = guild_id;
         this.twitch_channels = twitch_channels;
         this.game_filters = game_filters;
         this.announce_channel = announce_channel;
         this.cleanup = false;
         this.message_style = 1;
+        this.lembot = lembot;
     }
 
     public GuildStructure(Long guild_id, Long announce_channel, Boolean cleanup, Integer message_style) {       // necessary for DB reads
@@ -81,6 +83,14 @@ public class GuildStructure {
 
     public void removeGameFilter(String game) {
         game_filters.remove(game);
+    }
+
+    public Lembot getLembot() {
+        return lembot;
+    }
+
+    public void setLembot(Lembot lembot) {
+        this.lembot = lembot;
     }
 
     public Boolean getCleanup() {

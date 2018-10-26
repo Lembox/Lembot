@@ -8,6 +8,8 @@ public class ChannelDels {
     private String title;
     private String game;
     private Integer offline_flag;       // offline-flag to give streamers 3 minutes time to reconnect before announcing again
+    private Integer remove_flag = 0;     // if announcer can't detect the channel
+
 
     public ChannelDels(Long channelID, String name, Boolean live, Long postID, String title, String game, Integer offline_flag) {
         this.channelID = channelID;
@@ -73,5 +75,13 @@ public class ChannelDels {
 
     public void setOffline_flag(Integer offline_flag) {
         this.offline_flag = offline_flag;
+    }
+
+    public Integer getRemove_flag() {
+        return remove_flag;
+    }
+
+    public void setRemove_flag(Integer check_flag) {
+        this.remove_flag = check_flag;
     }
 }

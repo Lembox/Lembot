@@ -1,5 +1,6 @@
 package core;
 
+import me.philippheuer.twitch4j.exceptions.ChannelDoesNotExistException;
 import models.GuildStructure;
 import models.ChannelDels;
 
@@ -23,13 +24,15 @@ public class StreamAnnouncer {
     private Semaphore streamSemaphore = new Semaphore(1);   // to avoid adding/removing games/channels during announcement
     private Logger announcerLogger = LoggerFactory.getLogger(StreamAnnouncer.class);
     private final String twitchIcon = "https://abload.de/img/twitchicono8dj7.png";  // twitchicon for the embedded messages
+    private Lembot lembot;
+    private DBHandler dbHandler;
 
     public StreamAnnouncer(GuildStructure g) {
         this.g = g;
+        this.lembot = g.getLembot();
+        dbHandler = lembot.getDbHandler();
 
-        scheduler.scheduleAtFixedRate(() -> {
-            announceStreams();
-        }, 1L,1L, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(this::announceStreams, 1, 1, TimeUnit.MINUTES);
     }
 
     private void announceStreams() {
@@ -41,145 +44,158 @@ public class StreamAnnouncer {
 
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
-        IChannel announce_channel = Lembot.getDiscordClient().getChannelByID(g.getAnnounce_channel());
+        IChannel announce_channel = lembot.getDiscordClient().getChannelByID(g.getAnnounce_channel());
 
         List<ChannelDels> channelDels = g.getTwitch_channels();
         List<String> games = g.getGame_filters();
 
-        ChannelEndpoint channelEndpoint;
-        StreamEndpoint streamEndpoint;
+        ChannelEndpoint channelEndpoint = lembot.getChannelEndpoint();
+        StreamEndpoint streamEndpoint = lembot.getStreamEndpoint();
+        Channel c = null;
 
         for (ChannelDels cd : channelDels) {
-            channelEndpoint = Lembot.getTwitchClient().getChannelEndpoint();
-            streamEndpoint = Lembot.getTwitchClient().getStreamEndpoint();
-            // sometimes at least one of them becomes null (why?)
-            while (channelEndpoint == null) {
-                announcerLogger.error("ChannelEndpoint null during the announcements of guild {}", g.getGuild_id());
-                channelEndpoint = Lembot.getTwitchClient().getChannelEndpoint();
-            }
-            while (streamEndpoint == null) {
-                announcerLogger.error("StreamEndpoint null during the announcements of guild {}", g.getGuild_id());
-                streamEndpoint = Lembot.getTwitchClient().getStreamEndpoint();
-            }
+            // crappy code section due to weird errors coming from Twitch4J's API implementation
+            int retries = 3;     // 3 retries for Channel detection
 
-            Channel c = channelEndpoint.getChannel(cd.getChannelID());
-
-            // if channel has been deleted
-            if (c == null) {
-                announcerLogger.error("Channel reference for channel {} (id: {}) has been removed. Was the channel deleted?", cd.getName(), cd.getChannelID());
-                Lembot.sendMessage(announce_channel, "Channel reference for channel " + cd.getName() + " has been removed. The channel will be removed from the channel list.");
-                g.removeChannel(cd);
-                Lembot.getDbHandler().deleteChannelForGuild(Lembot.getDiscordClient().getGuildByID(g.getGuild_id()), cd.getChannelID());
-            }
-            else {
-                // update channel name if changed
-                if (!c.getName().equals(cd.getName())) {
-                    cd.setName(c.getName());
-                    Lembot.getDbHandler().updateName(g.getGuild_id(), cd.getChannelID(), c.getName());
-                }
-
-                // Channel was offline and goes live
-                if (!cd.getLive()) {
-                    try {
-                        if (streamEndpoint.isLive(c)) {
-                            if (games.isEmpty() || games.contains(toLowerCase(c.getGame()))) {
-                                Long id;
-                                if (g.getMessage_style().equals(0)) {
-                                    id = sendClassicMessage(announce_channel, c.getName(), c.getGame(), c.getStatus());
-                                }
-                                else {
-                                    id = sendEmbedMessage(announce_channel, c.getName(), c.getGame(), c.getStatus(), c.getLogo());
-                                }
-                                // if message could not be posted (missing permissions) then it will try again on the next cycle
-                                if (id != null) {
-                                    // Write to DB in case bot has to go offline and save to local variables
-                                    Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, id, c.getStatus(), c.getGame(), 0);
-
-                                    cd.setLive(true);
-                                    cd.setPostID(id);
-                                    cd.setTitle(c.getStatus());
-                                    cd.setGame(c.getGame());
-                                    cd.setOffline_flag(0);
-                                }
-                            }
+            while (true) {
+                try {
+                    c = channelEndpoint.getChannel(cd.getChannelID());
+                    break;
+                } catch (ChannelDoesNotExistException e) {
+                    announcerLogger.error("Channel {} with id: {} returned null in guild {}", cd.getName(), cd.getChannelID(), g.getGuild_id(), e);
+                    if (--retries < 1) {
+                        Integer removeFlag = cd.getRemove_flag();
+                        if (removeFlag > 2) {
+                            lembot.sendMessage(announce_channel, "Channel {} (id: {}) might have been deleted. It will be removed.");
+                            g.removeChannel(cd);
+                            dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildByID(g.getGuild_id()), cd.getChannelID());
                         }
-                    } catch (Exception e) {
-                        announcerLogger.error("Problem with announcer: guild {} and channel {}", g.getGuild_id(), c.getId(), e);
+                        else {
+                            cd.setRemove_flag(++removeFlag);
+                        }
+                        cd.setRemove_flag(cd.getRemove_flag() + 1);
+                        c = null;
+                        break;
                     }
+                } catch (Exception e) {
+                    announcerLogger.error("Channel {} with id: {} returned null in guild {}", cd.getName(), cd.getChannelID(), g.getGuild_id(), e);
+                    break;
                 }
-                // Channel is or was already live
-                else {
-                    try {
-                        if (!streamEndpoint.isLive(c)) {    // channel has gone offline
-                            if (cd.getOffline_flag() < 3) {      // 3 minute chance to go back live
-                                Integer offline_flag = cd.getOffline_flag() + 1;
-                                cd.setOffline_flag(offline_flag);
-                                Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), offline_flag);
+            }
+
+            if (c == null) {
+                continue;
+            }
+
+            cd.setRemove_flag(0);
+
+            // update channel name if changed
+            if (!c.getName().equals(cd.getName())) {
+                cd.setName(c.getName());
+                dbHandler.updateName(g.getGuild_id(), cd.getChannelID(), c.getName());
+            }
+
+            // Channel was offline and goes live
+            if (!cd.getLive()) {
+                try {
+                    if (streamEndpoint.isLive(c)) {
+                        if (games.isEmpty() || games.contains(toLowerCase(c.getGame()))) {
+                            Long id;
+                            if (g.getMessage_style().equals(0)) {
+                                id = sendClassicMessage(announce_channel, c.getName(), c.getGame(), c.getStatus());
                             }
                             else {
-                                if(!g.getCleanup()) {       // no cleanup -> offline messages
-                                    if (g.getMessage_style().equals(0)) {
-                                        editClassicMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle());
-                                    }
-                                    else {
-                                        editEmbedMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle(), c.getLogo());
-                                    }
-                                    Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, cd.getPostID(), c.getStatus(), c.getGame(), 0);
+                                id = sendEmbedMessage(announce_channel, c.getName(), c.getGame(), c.getStatus(), c.getLogo());
+                            }
+                            // if message could not be posted (missing permissions) then it will try again on the next cycle
+                            if (id != null) {
+                                // Write to DB in case bot has to go offline and save to local variables
+                                dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, id, c.getStatus(), c.getGame(), 0);
+
+                                cd.setLive(true);
+                                cd.setPostID(id);
+                                cd.setTitle(c.getStatus());
+                                cd.setGame(c.getGame());
+                                cd.setOffline_flag(0);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    announcerLogger.error("Problem with announcer: guild {} and channel {}", g.getGuild_id(), c.getId(), e);
+                }
+            }
+            // Channel is or was already live
+            else {
+                try {
+                    if (!streamEndpoint.isLive(c)) {    // channel has gone offline
+                        if (cd.getOffline_flag() < 3) {      // 3 minute chance to go back live
+                            Integer offline_flag = cd.getOffline_flag() + 1;
+                            cd.setOffline_flag(offline_flag);
+                            dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), offline_flag);
+                        }
+                        else {
+                            if(!g.getCleanup()) {       // no cleanup -> offline messages
+                                if (g.getMessage_style().equals(0)) {
+                                    editClassicOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle());
                                 }
                                 else {
-                                    Lembot.deleteMessage(announce_channel, cd.getPostID());
-                                    cd.setPostID(null);
-                                    Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, 0L, c.getStatus(), c.getGame(), 0);
+                                    editEmbedOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle(), c.getLogo());
                                 }
-                                cd.setLive(false);
-                                cd.setOffline_flag(0);
+                                dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, cd.getPostID(), c.getStatus(), c.getGame(), 0);
                             }
+                            else {
+                                lembot.deleteMessage(announce_channel, cd.getPostID());
+                                cd.setPostID(null);
+                                dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, 0L, c.getStatus(), c.getGame(), 0);
+                            }
+                            cd.setLive(false);
+                            cd.setOffline_flag(0);
                         }
-                        else {      // channel is still live
-                            if (!cd.getGame().equals(c.getGame())) {
-                                if (games.isEmpty() || games.contains(toLowerCase(c.getGame()))) {      // Streamed followed game and changes to followed game
-                                    if (g.getMessage_style().equals(0)) {
-                                        editClassicMessage(announce_channel, cd.getPostID(), c.getName(), c.getGame(), c.getStatus());
-                                    }
-                                    else {
-                                        editEmbedMessage(announce_channel, cd.getPostID(), c.getName(), c.getGame(), c.getStatus(), c.getLogo());
-                                    }
+                    }
+                    else {      // channel is still live
+                        if (!cd.getGame().equals(c.getGame())) {
+                            if (games.isEmpty() || games.contains(toLowerCase(c.getGame()))) {      // Streamed followed game and changes to followed game
+                                if (g.getMessage_style().equals(0)) {
+                                    editClassicMessage(announce_channel, cd.getPostID(), c.getName(), c.getGame(), c.getStatus());
+                                }
+                                else {
+                                    editEmbedMessage(announce_channel, cd.getPostID(), c.getName(), c.getGame(), c.getStatus(), c.getLogo());
+                                }
 
-                                    Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), 0);
-                                    cd.setGame(c.getGame());
-                                    cd.setTitle(c.getStatus());
-                                    cd.setOffline_flag(0);
-                                }
-                                else {              // Streamed followed game and changes to not followed game
-                                    if (!g.getCleanup()) {
-                                        if (g.getMessage_style().equals(0)) {
-                                            editClassicOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle());
-                                        }
-                                        else {
-                                            editEmbedOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle(), c.getLogo());
-                                        }
-                                        Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, cd.getPostID(), c.getStatus(), c.getGame(), 0);
+                                dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), 0);
+                                cd.setGame(c.getGame());
+                                cd.setTitle(c.getStatus());
+                                cd.setOffline_flag(0);
+                            }
+                            else {              // Streamed followed game and changes to not followed game
+                                if (!g.getCleanup()) {
+                                    if (g.getMessage_style().equals(0)) {
+                                        editClassicOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle());
                                     }
                                     else {
-                                        Lembot.deleteMessage(announce_channel, cd.getPostID());
-                                        cd.setPostID(null);
-                                        Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, 0L, c.getStatus(), c.getGame(), 0);
+                                        editEmbedOffMessage(announce_channel, cd.getPostID(), c.getName(), cd.getGame(), cd.getTitle(), c.getLogo());
                                     }
-                                    cd.setOffline_flag(0);
-                                    cd.setLive(false);
-                                    cd.setGame(c.getGame());
-                                    cd.setTitle(c.getStatus());
+                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, cd.getPostID(), c.getStatus(), c.getGame(), 0);
                                 }
-                            }
-                            else if (cd.getOffline_flag() != 0) {
+                                else {
+                                    lembot.deleteMessage(announce_channel, cd.getPostID());
+                                    cd.setPostID(null);
+                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 0, 0L, c.getStatus(), c.getGame(), 0);
+                                }
                                 cd.setOffline_flag(0);
-                                Lembot.getDbHandler().updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), 0);
+                                cd.setLive(false);
+                                cd.setGame(c.getGame());
+                                cd.setTitle(c.getStatus());
                             }
                         }
+                        else if (cd.getOffline_flag() != 0) {
+                            cd.setOffline_flag(0);
+                            dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), c.getName(), 1, cd.getPostID(), c.getStatus(), c.getGame(), 0);
+                        }
                     }
-                    catch (Exception e) {
-                        announcerLogger.error("Error occured during announcements of guild {} and channel {}", g.getGuild_id(), c.getName(), e);
-                    }
+                }
+                catch (Exception e) {
+                    announcerLogger.error("Error occured during announcements of guild {} and channel {}", g.getGuild_id(), c.getName(), e);
                 }
             }
         }
@@ -188,7 +204,7 @@ public class StreamAnnouncer {
     }
 
     public void shutdownScheduler() {
-        scheduler.shutdown();
+        scheduler.shutdownNow();
         announcerLogger.warn("Announcer of guild {} was shutdown", g.getGuild_id());
         streamSemaphore = new Semaphore(1);
     }
@@ -200,9 +216,7 @@ public class StreamAnnouncer {
 
         scheduler = Executors.newScheduledThreadPool(1);
 
-        scheduler.scheduleAtFixedRate(() -> {
-            announceStreams();
-        },1,1, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(this::announceStreams,1,1, TimeUnit.MINUTES);
 
         announcerLogger.warn("Announcer of guild {} was restarted", g.getGuild_id());
     }
@@ -248,7 +262,7 @@ public class StreamAnnouncer {
         builder.withAuthorIcon(twitchIcon);
         builder.withTitle("https://twitch.tv/" + channelName);
         builder.withUrl("https://twitch.tv/" + channelName);
-        builder.withThumbnail(iconUrl);
+        //     builder.withThumbnail(iconUrl);
 
         return builder.build();
     }
@@ -263,7 +277,7 @@ public class StreamAnnouncer {
         if (title != null) {
             message += ": **" + title + "**";
         }
-        message += "\n https://twitch.tv/" + channelName;
+        message += "\nhttps://twitch.tv/" + channelName;
 
         return message;
     }
@@ -272,39 +286,39 @@ public class StreamAnnouncer {
         String message = "[OFFLINE]: " + channelName + " was streaming";
 
         if (game != null) {
-            message += game;
+            message += " " + game;
         }
 
         if (title != null) {
             message += ": **" + title + "**";
         }
-        message += "\n <https://twitch.tv/" + channelName + ">";
+        message += "\n<https://twitch.tv/" + channelName + ">";
 
         return message;
     }
 
     private Long sendClassicMessage(IChannel channel, String channelName, String game, String title) {
-        return Lembot.sendMessageID(channel, buildClassicMessage(channelName, game, title));
+        return lembot.sendMessageID(channel, buildClassicMessage(channelName, game, title));
     }
 
     private void editClassicMessage(IChannel channel, Long postID, String channelName, String game, String title) {
-        Lembot.editMessage(channel, postID, buildClassicMessage(channelName, game, title));
+        lembot.editMessage(channel, postID, buildClassicMessage(channelName, game, title));
     }
 
     private void editClassicOffMessage(IChannel channel, Long postID, String channelName, String game, String title) {
-        Lembot.editMessage(channel, postID, buildClassicOffMessage(channelName, game, title));
+        lembot.editMessage(channel, postID, buildClassicOffMessage(channelName, game, title));
     }
 
     private Long sendEmbedMessage(IChannel channel, String channelName, String game, String title, String iconUrl) {
-        return Lembot.sendMessageID(channel, buildEmbedMessage(channelName, game, title, iconUrl));
+        return lembot.sendMessageID(channel, buildEmbedMessage(channelName, game, title, iconUrl));
     }
 
     private void editEmbedMessage(IChannel channel, Long postID, String channelName, String game, String title, String iconUrl) {
-        Lembot.editMessage(channel, postID, buildEmbedMessage(channelName, game, title, iconUrl));
+        lembot.editMessage(channel, postID, buildEmbedMessage(channelName, game, title, iconUrl));
     }
 
     private void editEmbedOffMessage(IChannel channel, Long postID, String channelName, String game, String title, String iconUrl) {
-        Lembot.editMessage(channel, postID, buildEmbedOffMessage(channelName, game, title, iconUrl));
+        lembot.editMessage(channel, postID, buildEmbedOffMessage(channelName, game, title, iconUrl));
     }
 
     private String toLowerCase(String input) {
