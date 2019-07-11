@@ -1,24 +1,22 @@
 package models;
 
+import com.github.twitch4j.helix.domain.User;
 import core.Lembot;
 import core.StreamAnnouncer;
 
-import me.philippheuer.twitch4j.model.Channel;
-
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 public class GuildStructure {
     private Long guild_id;
     private List<ChannelDels> twitch_channels;
-    private List<String> game_filters;
+    private Map<String, String> game_filters;
     private Long announce_channel;
     private Boolean cleanup;
     private Integer message_style;
     private StreamAnnouncer announcer;
     private Lembot lembot;
 
-    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, List<String> game_filters, Long announce_channel, Lembot lembot) {     // for new guilds
+    public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, Map<String, String> game_filters, Long announce_channel, Lembot lembot) {     // for new guilds
         this.guild_id = guild_id;
         this.twitch_channels = twitch_channels;
         this.game_filters = game_filters;
@@ -59,16 +57,16 @@ public class GuildStructure {
         this.announce_channel = announce_channel;
     }
 
-    public List<String> getGame_filters() {
+    public Map<String, String> getGame_filters() {
         return game_filters;
     }
 
-    public void setGame_filters(List<String> game_filters) {
+    public void setGame_filters(Map<String, String> game_filters) {
         this.game_filters = game_filters;
     }
 
-    public void addChannel(Channel c) {
-        twitch_channels.add(new ChannelDels(c.getId(), c.getName(), false, null, c.getStatus(), c.getGame(), 0));
+    public void addChannel(User u) {
+        twitch_channels.add(new ChannelDels(u.getId(), u.getDisplayName(), false, null, "title", "game",0L, 0));
         sortChannels();
     }
 
@@ -76,13 +74,13 @@ public class GuildStructure {
         twitch_channels.remove(channelDels);
     }
 
-    public void addGameFilter(String game) {
-        game_filters.add(game);
+    public void addGameFilter(String gameID, String game) {
+        game_filters.put(gameID, game);
         sortGames();
     }
 
-    public void removeGameFilter(String game) {
-        game_filters.remove(game);
+    public void removeGameFilter(String gameID) {
+        game_filters.remove(gameID);
     }
 
     public Lembot getLembot() {
@@ -118,7 +116,7 @@ public class GuildStructure {
     }
 
     private void sortGames() {
-        game_filters.sort(String.CASE_INSENSITIVE_ORDER);
+        game_filters = new MapUtil().sortByValue(game_filters);
     }
 
     private void sortChannels() {
@@ -130,6 +128,20 @@ public class GuildStructure {
         public int compare(ChannelDels c1, ChannelDels c2)
         {
             return c1.getName().compareTo(c2.getName());
+        }
+    }
+
+    public class MapUtil {
+        public <K, V extends Comparable<? super V>> Map<K, V> sortByValue(Map<K, V> map) {
+            List<Map.Entry<K, V>> list = new ArrayList<>(map.entrySet());
+            list.sort(Map.Entry.comparingByValue());
+
+            Map<K, V> result = new LinkedHashMap<>();
+            for (Map.Entry<K, V> entry : list) {
+                result.put(entry.getKey(), entry.getValue());
+            }
+
+            return result;
         }
     }
 }

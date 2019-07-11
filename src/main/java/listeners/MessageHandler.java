@@ -3,9 +3,7 @@ package listeners;
 import commands.Commander;
 
 import core.Lembot;
-import sx.blah.discord.api.events.EventSubscriber;
-import sx.blah.discord.handle.impl.events.guild.channel.message.MessageReceivedEvent;
-import sx.blah.discord.handle.obj.IMessage;
+import discord4j.core.object.entity.Message;
 
 public class MessageHandler {
     private Lembot lembot;
@@ -16,12 +14,10 @@ public class MessageHandler {
         commander = new Commander(lembot);
     }
 
-    @EventSubscriber
-    public void onMessageEvent(MessageReceivedEvent event) {
+    public void onMessageEvent(Message message) {
         String prefix = "!";
-        IMessage message = event.getMessage();
 
-        if (message.getContent().toLowerCase().startsWith(prefix) || message.getContent().toLowerCase().equals("!config")) {
+        if (message.getContent().orElse("nothing").toLowerCase().startsWith(prefix) || message.getContent().orElse("nothing").toLowerCase().equals("!config")) {
             commander.processCommand(message, prefix);
         }
     }

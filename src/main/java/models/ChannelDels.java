@@ -7,17 +7,20 @@ public class ChannelDels {
     private Long postID;
     private String title;
     private String game;
+    private Long gameID;
     private Integer offline_flag;       // offline-flag to give streamers 3 minutes time to reconnect before announcing again
     private Integer remove_flag = 0;     // if announcer can't detect the channel
+    private String iconUrl;
 
 
-    public ChannelDels(Long channelID, String name, Boolean live, Long postID, String title, String game, Integer offline_flag) {
+    public ChannelDels(Long channelID, String name, Boolean live, Long postID, String title, String game, Long gameID, Integer offline_flag) {
         this.channelID = channelID;
         this.name = name;
         this.live = live;
         this.postID = postID;
         this.title = title;
         this.game = game;
+        this.gameID = gameID;
         this.offline_flag = offline_flag;
     }
 
@@ -69,6 +72,14 @@ public class ChannelDels {
         this.game = game;
     }
 
+    public Long getGameID() {
+        return gameID;
+    }
+
+    public void setGameID(Long gameID) {
+        this.gameID = gameID;
+    }
+
     public Integer getOffline_flag() {
         return offline_flag;
     }
@@ -83,5 +94,13 @@ public class ChannelDels {
 
     public void setRemove_flag(Integer check_flag) {
         this.remove_flag = check_flag;
+    }
+
+    public String getIconUrl() {
+        return iconUrl;
+    }
+
+    public void setIconUrl(String iconUrl) {
+        this.iconUrl = iconUrl;
     }
 }
