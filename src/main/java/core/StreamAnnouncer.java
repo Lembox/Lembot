@@ -59,6 +59,8 @@ public class StreamAnnouncer {
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
             setGameFilters = !gameIDs.isEmpty();
 
+            Map<Long, ChannelDels> gameStreams = new HashMap<>();
+
             Map<Long, ChannelDels> channels = new HashMap<>();
             Map<Long, Long> unfilteredGameStreams = new HashMap<>();
 
@@ -72,59 +74,88 @@ public class StreamAnnouncer {
             // Check for changes in Channel, i. e. new icon or name
             List<Long> allChannels = new ArrayList<>(channels.keySet());
 
-            if (!allChannels.isEmpty()) {
+            if (!allChannels.isEmpty() || setGameFilters) {
                 try {
-                    try {
-                        UserList resultUserList = lembot.getUsers(allChannels, null);
-                        List<User> userList = resultUserList.getUsers();
+                    if (!allChannels.isEmpty()) {
+                        try {
+                            UserList resultUserList = lembot.getUsers(allChannels, null);
+                            List<User> userList = resultUserList.getUsers();
 
-                        for (User u : userList) {
-                            allChannels.remove(u.getId());
-                            ChannelDels cd = channels.get(u.getId());
-                            String curName = u.getDisplayName();
-                            if (!cd.getName().equals(curName)) {
-                                cd.setName(u.getDisplayName());
-                                dbHandler.updateName(g.getGuild_id(), cd.getChannelID(), cd.getName());
+                            for (User u : userList) {
+                                allChannels.remove(u.getId());
+                                ChannelDels cd = channels.get(u.getId());
+                                String curName = u.getDisplayName();
+                                if (!cd.getName().equals(curName)) {
+                                    cd.setName(u.getDisplayName());
+                                    dbHandler.updateName(g.getGuild_id(), cd.getChannelID(), cd.getName());
+                                }
+                                cd.setIconUrl(u.getProfileImageUrl());
+                                cd.setRemove_flag(0);
                             }
-                            cd.setIconUrl(u.getProfileImageUrl());
-                            cd.setRemove_flag(0);
+                        } catch (Exception e) {
+                            announcerLogger.error("Error occured at user check for guild {}.", g.getGuild_id(), e);
+                            throw e;
                         }
-                    } catch (Exception e) {
-                        announcerLogger.error("Error occured at user check for guild {}.", g.getGuild_id(), e);
-                        throw e;
-                    }
 
-                    for (Long l : allChannels) {
-                        ChannelDels cd = channels.get(l);
-                        Integer removeFlag = cd.getRemove_flag();
-                        if (removeFlag > 2) {
-                            lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
-                            g.removeChannel(cd);
-                            dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
-                        } else {
-                            cd.setRemove_flag(++removeFlag);
+                        for (Long l : allChannels) {
+                            ChannelDels cd = channels.get(l);
+                            Integer removeFlag = cd.getRemove_flag();
+                            if (removeFlag > 2) {
+                                lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
+                                g.removeChannel(cd);
+                                dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
+                            } else {
+                                cd.setRemove_flag(++removeFlag);
+                            }
+                            channels.remove(l);
                         }
-                        channels.remove(l);
                     }
 
                     try {
-                        StreamList resultList = lembot.getStreams(gameIDs, new ArrayList<Long>(channels.keySet()));
-                        List<Stream> streams = resultList.getStreams();
+                        List<Stream> streams = new ArrayList<>();
+                        List<Stream> moreStreams;
+                        String pagination = "";
+                        do {
+                            StreamList resultList = lembot.getStreams(pagination, gameIDs, new ArrayList<Long>(channels.keySet()));
+                            pagination = resultList.getPagination().getCursor();
+                            moreStreams = resultList.getStreams();
+                            streams.addAll(moreStreams);
+                        } while (!moreStreams.isEmpty());
 
                         for (Stream s : streams) {
                             ChannelDels cd = channels.get(s.getUserId());
                             // was live and still streaming filtered game
-                            if (cd.getLive()) {
-                                if (!s.getGameId().equals(cd.getGameID())) {        // streams another filtered game
-                                    cd.setGameID(s.getGameId());
-                                    cd.setTitle(s.getTitle());
-                                    cd.setOffline_flag(0);
+                            if (cd != null) {
+                                if (cd.getLive()) {
+                                    if (!s.getGameId().equals(cd.getGameID())) {        // streams another filtered game
+                                        cd.setGameID(s.getGameId());
+                                        cd.setTitle(s.getTitle());
+                                        cd.setOffline_flag(0);
 
-                                    if (setGameFilters) {
-                                        String newGame = g.getGame_filters().get(String.valueOf(s.getGameId()));
+                                        if (setGameFilters) {
+                                            String newGame = g.getGame_filters().get(String.valueOf(s.getGameId()));
 
-                                        cd.setGame(newGame);
+                                            cd.setGame(newGame);
 
+
+                                            if (g.getMessage_style().equals(0)) {
+                                                editClassicMessage(announce_channel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                            } else {
+                                                editEmbedMessage(announce_channel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                            }
+
+                                            dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                        }
+                                        else {
+                                            System.out.println(s.getGameId());
+
+                                            unfilteredGameIDs.add(String.valueOf(s.getGameId()));
+                                            unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
+                                        }
+
+                                    } else if (!s.getTitle().equals(cd.getTitle())) {    // changed title
+                                        cd.setTitle(s.getTitle());
+                                        cd.setOffline_flag(0);
 
                                         if (g.getMessage_style().equals(0)) {
                                             editClassicMessage(announce_channel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
@@ -134,48 +165,34 @@ public class StreamAnnouncer {
 
                                         dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                                     }
-                                    else {
-                                        System.out.println(s.getGameId());
+                                    channels.remove(s.getUserId());
+                                } else {      // was offline and went live
+                                    if (setGameFilters) {
+                                        cd.setGame(g.getGame_filters().get(String.valueOf(s.getGameId())));
+                                        cd.setGameID(s.getGameId());
+                                        cd.setTitle(s.getTitle());
+                                        cd.setOffline_flag(0);
+                                        cd.setLive(true);
+
+                                        if (g.getMessage_style().equals(0)) {
+                                            cd.setPostID(sendClassicMessage(announce_channel, cd.getName(), cd.getGame(), cd.getTitle()));
+                                        } else {
+                                            cd.setPostID(sendEmbedMessage(announce_channel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
+                                        }
+                                        dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                        channels.remove(s.getUserId());
+                                    } else {
+                                        cd.setTitle(s.getTitle());
+                                        cd.setGameID(s.getGameId());
 
                                         unfilteredGameIDs.add(String.valueOf(s.getGameId()));
                                         unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
                                     }
-
-                                } else if (!s.getTitle().equals(cd.getTitle())) {    // changed title
-                                    cd.setTitle(s.getTitle());
-                                    cd.setOffline_flag(0);
-
-                                    if (g.getMessage_style().equals(0)) {
-                                        editClassicMessage(announce_channel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
-                                    } else {
-                                        editEmbedMessage(announce_channel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
-                                    }
-
-                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                                 }
-                                channels.remove(s.getUserId());
-                            } else {      // was offline and went live
-                                if (setGameFilters) {
-                                    cd.setGame(g.getGame_filters().get(String.valueOf(s.getGameId())));
-                                    cd.setGameID(s.getGameId());
-                                    cd.setTitle(s.getTitle());
-                                    cd.setOffline_flag(0);
-                                    cd.setLive(true);
-
-                                    if (g.getMessage_style().equals(0)) {
-                                        cd.setPostID(sendClassicMessage(announce_channel, cd.getName(), cd.getGame(), cd.getTitle()));
-                                    } else {
-                                        cd.setPostID(sendEmbedMessage(announce_channel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
-                                    }
-                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
-                                    channels.remove(s.getUserId());
-                                } else {
-                                    cd.setTitle(s.getTitle());
-                                    cd.setGameID(s.getGameId());
-
-                                    unfilteredGameIDs.add(String.valueOf(s.getGameId()));
-                                    unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
-                                }
+                            }
+                            else {      // GameFilter set but no user found
+                                ChannelDels cDel = new ChannelDels(s.getUserId(), "nN", true, 0L, s.getTitle(), g.getGame_filters().get(String.valueOf(s.getGameId())), s.getGameId(), -1);
+                                gameStreams.put(s.getUserId(), cDel);
                             }
                         }
                     } catch (Exception e) {
@@ -208,6 +225,14 @@ public class StreamAnnouncer {
 
                                 dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                                 channels.remove(l);
+                            }
+
+                            UserList userList = lembot.getUsers(new ArrayList<Long>(gameStreams.keySet()), null);
+                            List<User> resultUserList = userList.getUsers();
+                            for (User u : resultUserList) {
+                                ChannelDels cDel = gameStreams.get(u.getId());
+                                g.addChannel(u);
+
                             }
                         } catch (Exception e) {
                             announcerLogger.error("Error occured in Game check for guild {}.", g.getGuild_id(), e);

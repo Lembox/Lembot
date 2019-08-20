@@ -328,8 +328,8 @@ public class Lembot {
         return twitchClient.getHelix().getUsers(properties.getProperty("twitch_oauth"), channelIDs, channelNames).execute();
     }
 
-    public StreamList getStreams(List<String> gameIDs, List<Long> channelIDs) throws Exception {
-        return twitchClient.getHelix().getStreams(properties.getProperty("twitch_oauth"), "", "", null, null, gameIDs, null, channelIDs, null).execute();
+    public StreamList getStreams(String after, List<String> gameIDs, List<Long> channelIDs) throws Exception {
+        return twitchClient.getHelix().getStreams(properties.getProperty("twitch_oauth"), after, "", null, null, gameIDs, null, channelIDs, null).execute();
     }
 
     public GameList getGames(List<String> gameIDs, List<String> gameNames) throws Exception {
