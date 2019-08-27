@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
+import org.apache.commons.collections4.ListUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,8 +79,14 @@ public class StreamAnnouncer {
                 try {
                     if (!allChannels.isEmpty()) {
                         try {
-                            UserList resultUserList = lembot.getUsers(allChannels, null);
-                            List<User> userList = resultUserList.getUsers();
+                            List<List<Long>> channelChunks = ListUtils.partition(allChannels, 100);
+                            UserList resultUserList;
+                            List<User> userList = new ArrayList<>();
+
+                            for (List<Long> l : channelChunks) {
+                                resultUserList = lembot.getUsers(l, null);
+                                userList.addAll(resultUserList.getUsers());
+                            }
 
                             for (User u : userList) {
                                 allChannels.remove(u.getId());
@@ -114,13 +121,17 @@ public class StreamAnnouncer {
                     try {
                         List<Stream> streams = new ArrayList<>();
                         List<Stream> moreStreams;
-                        String pagination = "";
-                        do {
-                            StreamList resultList = lembot.getStreams(pagination, gameIDs, new ArrayList<Long>(channels.keySet()));
-                            pagination = resultList.getPagination().getCursor();
-                            moreStreams = resultList.getStreams();
-                            streams.addAll(moreStreams);
-                        } while (!moreStreams.isEmpty());
+                        List<List<String>> gameIdz = ListUtils.partition(gameIDs, 100);
+                        for (List<String> gameCodes : gameIdz) {
+                            String pagination = "";
+                            do {
+                                StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<Long>(channels.keySet()));
+                                pagination = resultList.getPagination().getCursor();
+                                moreStreams = resultList.getStreams();
+                                streams.addAll(moreStreams);
+                                System.out.println("Iteration in guild " + g.getGuild_id());
+                            } while (!moreStreams.isEmpty());
+                        }
 
                         for (Stream s : streams) {
                             ChannelDels cd = channels.get(s.getUserId());
