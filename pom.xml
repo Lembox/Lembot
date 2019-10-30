@@ -9,7 +9,7 @@
         <discord4j.version>3.0.7</discord4j.version>
         <twitch4j.version>1.0.0-alpha.14</twitch4j.version>
         <sqlite-jdbc.version>3.28.0</sqlite-jdbc.version>
-        <jackson.version>2.9.9</jackson.version>
+        <jackson.version>2.10.0</jackson.version>
     </properties>
 
     <groupId>Lembot</groupId>
