@@ -85,7 +85,7 @@ public class DBHandler {
     public void addTableForGuild(Guild guild) {
         String table_name = "g" + guild.getId().asLong();
 
-        try (PreparedStatement s_add = conn.prepareStatement("CREATE TABLE IF NOT EXISTS " + table_name + " (channel_ID INTEGER PRIMARY KEY NOT NULL, name STRING NOT NULL, live INTEGER, post_id INTEGER, title STRING, game STRING, gameID INTEGER, offline_flag INTEGER);")) {
+        try (PreparedStatement s_add = conn.prepareStatement("CREATE TABLE IF NOT EXISTS " + table_name + " (channel_ID STRING PRIMARY KEY NOT NULL, name STRING NOT NULL, live INTEGER, post_id INTEGER, title STRING, game STRING, gameID STRING, offline_flag INTEGER);")) {
             s_add.executeUpdate();
         }
         catch (SQLException se) {
@@ -250,11 +250,11 @@ public class DBHandler {
         return result;
     }
 
-    void updateName(Long guildID, Long channelID, String name) {
+    void updateName(Long guildID, String channelID, String name) {
         String table_name = "g" + guildID;
         try (PreparedStatement s_updN = conn.prepareStatement("UPDATE " + table_name + " SET name = ? WHERE channel_ID = ?")) {
             s_updN.setString(1, name);
-            s_updN.setLong(2, channelID);
+            s_updN.setString(2, channelID);
 
             s_updN.executeUpdate();
         }
@@ -263,12 +263,12 @@ public class DBHandler {
         }
     }
 
-    public void addChannelForGuild(Message message, Long channelID, String channelName) {
+    public void addChannelForGuild(Message message, String channelID, String channelName) {
         Guild guild = message.getGuild().block();
         String table_name = "g" + guild.getId().asLong();
 
         try (PreparedStatement s_addC = conn.prepareStatement("INSERT INTO " + table_name + "(channel_id, name) VALUES(?, ?)")) {
-            s_addC.setLong(1, channelID);
+            s_addC.setString(1, channelID);
             s_addC.setString(2, channelName);
 
             s_addC.executeUpdate();
@@ -307,7 +307,7 @@ public class DBHandler {
         }
     }
 
-    void updateChannelForGuild(Long guildID, Long channelID, String channelName, Integer live, Long postID, String title, String game, Long gameID, Integer offline_flag) {
+    void updateChannelForGuild(Long guildID, String channelID, String channelName, Integer live, Long postID, String title, String game, String gameID, Integer offline_flag) {
         String table_name = "g" + guildID;
         try (PreparedStatement s_updC = conn.prepareStatement("UPDATE " + table_name + " SET name = ?, live = ?, post_id = ?, title = ?, game = ?, gameID = ?, offline_flag = ? WHERE channel_id = ?")) {
             s_updC.setString(1, channelName);
@@ -315,9 +315,9 @@ public class DBHandler {
             s_updC.setLong(3, postID);
             s_updC.setString(4, title);
             s_updC.setString(5, game);
-            s_updC.setLong(6, gameID);
+            s_updC.setString(6, gameID);
             s_updC.setInt(7, offline_flag);
-            s_updC.setLong(8, channelID);
+            s_updC.setString(8, channelID);
 
             s_updC.executeUpdate();
         }
@@ -333,7 +333,7 @@ public class DBHandler {
         try (PreparedStatement s_getC = conn.prepareStatement("SELECT * FROM " + table_name + " ORDER BY name COLLATE NOCASE")) {
             try (ResultSet rs = s_getC.executeQuery()) {
                 while (rs.next()) {
-                    ChannelDels cd = new ChannelDels(rs.getLong("channel_id"), rs.getString("name"), rs.getInt("live") == 1, rs.getLong("post_id"), rs.getString("title"), rs.getString("game"), rs.getLong("gameID"), rs.getInt("offline_flag"));
+                    ChannelDels cd = new ChannelDels(rs.getString("channel_id"), rs.getString("name"), rs.getInt("live") == 1, rs.getLong("post_id"), rs.getString("title"), rs.getString("game"), rs.getString("gameID"), rs.getInt("offline_flag"));
                     result.add(cd);
                 }
             }
@@ -387,11 +387,11 @@ public class DBHandler {
         }
     }
 
-    public void deleteChannelForGuild(Guild guild, Long channelID) {
+    public void deleteChannelForGuild(Guild guild, String channelID) {
         String table_name = "g" + guild.getId().asLong();
 
         try (PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?")) {
-            s_delC.setLong(1, channelID);
+            s_delC.setString(1, channelID);
 
             s_delC.executeUpdate();
         }

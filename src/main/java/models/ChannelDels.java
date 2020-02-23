@@ -1,19 +1,19 @@
 package models;
 
 public class ChannelDels {
-    private Long channelID;
+    private String channelID;
     private String name;
     private Boolean live;
     private Long postID;
     private String title;
     private String game;
-    private Long gameID;
+    private String gameID;
     private Integer offline_flag;       // offline-flag to give streamers 3 minutes time to reconnect before announcing again
     private Integer remove_flag = 0;     // if announcer can't detect the channel
     private String iconUrl;
 
 
-    public ChannelDels(Long channelID, String name, Boolean live, Long postID, String title, String game, Long gameID, Integer offline_flag) {
+    public ChannelDels(String channelID, String name, Boolean live, Long postID, String title, String game, String gameID, Integer offline_flag) {
         this.channelID = channelID;
         this.name = name;
         this.live = live;
@@ -24,11 +24,11 @@ public class ChannelDels {
         this.offline_flag = offline_flag;
     }
 
-    public Long getChannelID() {
+    public String getChannelID() {
         return channelID;
     }
 
-    public void setChannelID(Long channelID) {
+    public void setChannelID(String channelID) {
         this.channelID = channelID;
     }
 
@@ -72,11 +72,11 @@ public class ChannelDels {
         this.game = game;
     }
 
-    public Long getGameID() {
+    public String getGameID() {
         return gameID;
     }
 
-    public void setGameID(Long gameID) {
+    public void setGameID(String gameID) {
         this.gameID = gameID;
     }
 

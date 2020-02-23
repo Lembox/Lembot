@@ -11,10 +11,6 @@ import models.GuildStructure;
 import models.ChannelDels;
 
 import java.awt.*;
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.UnknownHostException;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
@@ -28,7 +24,7 @@ public class StreamAnnouncer {
     private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);   // announcer based on executor
     private GuildStructure g;
     private Semaphore streamSemaphore = new Semaphore(1);   // to avoid adding/removing games/channels during announcement
-    private Logger announcerLogger = LoggerFactory.getLogger(StreamAnnouncer.class);
+    private final Logger announcerLogger = LoggerFactory.getLogger(StreamAnnouncer.class);
     private final String twitchIcon = "https://abload.de/img/twitchicono8dj7.png";  // twitchicon for the embedded messages
     private Lembot lembot;
     private DBHandler dbHandler;
@@ -53,6 +49,8 @@ public class StreamAnnouncer {
 
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
+        System.out.println(g.getAnnounce_channel());
+
         if (g.getAnnounce_channel() != null) {
             TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
 
@@ -60,10 +58,10 @@ public class StreamAnnouncer {
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
             setGameFilters = !gameIDs.isEmpty();
 
-            Map<Long, ChannelDels> gameStreams = new HashMap<>();
+            Map<String, ChannelDels> gameStreams = new HashMap<>();
 
-            Map<Long, ChannelDels> channels = new HashMap<>();
-            Map<Long, Long> unfilteredGameStreams = new HashMap<>();
+            Map<String, ChannelDels> channels = new HashMap<>();
+            Map<String, String> unfilteredGameStreams = new HashMap<>();
 
             List<String> unfilteredGameIDs = new ArrayList<>();
 
@@ -73,17 +71,17 @@ public class StreamAnnouncer {
             }
 
             // Check for changes in Channel, i. e. new icon or name
-            List<Long> allChannels = new ArrayList<>(channels.keySet());
+            List<String> allChannels = new ArrayList<>(channels.keySet());
 
             if (!allChannels.isEmpty() || setGameFilters) {
                 try {
                     if (!allChannels.isEmpty()) {
                         try {
-                            List<List<Long>> channelChunks = ListUtils.partition(allChannels, 100);
+                            List<List<String>> channelChunks = ListUtils.partition(allChannels, 100);
                             UserList resultUserList;
                             List<User> userList = new ArrayList<>();
 
-                            for (List<Long> l : channelChunks) {
+                            for (List<String> l : channelChunks) {
                                 resultUserList = lembot.getUsers(l, null);
                                 userList.addAll(resultUserList.getUsers());
                             }
@@ -104,7 +102,7 @@ public class StreamAnnouncer {
                             throw e;
                         }
 
-                        for (Long l : allChannels) {
+                        for (String l : allChannels) {
                             ChannelDels cd = channels.get(l);
                             Integer removeFlag = cd.getRemove_flag();
                             if (removeFlag > 2) {
@@ -125,7 +123,7 @@ public class StreamAnnouncer {
                         for (List<String> gameCodes : gameIdz) {
                             String pagination = "";
                             do {
-                                StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<Long>(channels.keySet()));
+                                StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<String>(channels.keySet()));
                                 pagination = resultList.getPagination().getCursor();
                                 moreStreams = resultList.getStreams();
                                 streams.addAll(moreStreams);
@@ -145,7 +143,6 @@ public class StreamAnnouncer {
 
                                         if (setGameFilters) {
                                             String newGame = g.getGame_filters().get(String.valueOf(s.getGameId()));
-
                                             cd.setGame(newGame);
 
 
@@ -221,7 +218,7 @@ public class StreamAnnouncer {
                                 games.put(g.getId(), g.getName());
                             }
 
-                            for (Long l : unfilteredGameStreams.keySet()) {
+                            for (String l : unfilteredGameStreams.keySet()) {
                                 ChannelDels cd = channels.get(l);
 
                                 cd.setGame(games.get(String.valueOf(unfilteredGameStreams.get(cd.getChannelID()))));  // TODO: unfilteredGameStreams sometimes NULL
@@ -238,7 +235,7 @@ public class StreamAnnouncer {
                                 channels.remove(l);
                             }
 
-                            UserList userList = lembot.getUsers(new ArrayList<Long>(gameStreams.keySet()), null);
+                            UserList userList = lembot.getUsers(new ArrayList<String>(gameStreams.keySet()), null);
                             List<User> resultUserList = userList.getUsers();
                             for (User u : resultUserList) {
                                 ChannelDels cDel = gameStreams.get(u.getId());

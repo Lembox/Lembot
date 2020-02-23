@@ -14,7 +14,7 @@
 
     <groupId>Lembot</groupId>
     <artifactId>Lembot</artifactId>
-    <version>0.91</version>
+    <version>0.92</version>
     <build>
         <plugins>
             <plugin>

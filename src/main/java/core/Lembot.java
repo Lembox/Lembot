@@ -112,6 +112,7 @@ public class Lembot {
     }
 
     public void init() {
+        System.out.println("init");
         // Read necessary information from DB
         List<GuildStructure> guilds = dbHandler.getGuilds();
         List<Guild> connected_guilds = discordClient.getGuilds().collectList().block();
@@ -178,6 +179,7 @@ public class Lembot {
         guildSemaphore.release();
         initialized = true;
         logger.info("Guilds reinitialized");
+        System.out.println("Guilds reinitialized");
     }
 
     public TwitchClient getTwitchClient() {

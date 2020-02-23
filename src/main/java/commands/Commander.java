@@ -405,7 +405,7 @@ public class Commander {
         StringBuilder response = new StringBuilder();
 
         List<String> newChannelNames = new ArrayList<>();
-        List<Long> newChannelIDs = new ArrayList<>();
+        List<String> newChannelIDs = new ArrayList<>();
 
         try {
             guildStructure.getAnnouncer().getStreamSemaphore().acquire();
@@ -416,9 +416,10 @@ public class Commander {
         for (String c : channelNames) {
             Long channelID = null;
             ChannelDels cd;
+            System.out.println(c);
             if(StringUtils.isNumeric(c)) {
-                cd = findChannelDelsWithIDAlreadyThere(guildStructure, Long.parseLong(c));
                 channelID = Long.parseLong(c);
+                cd = findChannelDelsWithIDAlreadyThere(guildStructure, channelID);
             }
             else {
                 cd = findChannelDelsWithIDAlreadyThere(guildStructure, c);
@@ -429,7 +430,7 @@ public class Commander {
             }
             else {
                 if (channelID != null) {
-                    newChannelIDs.add(channelID);
+                    newChannelIDs.add(c);
                 }
                 else {
                     newChannelNames.add(c);
@@ -444,7 +445,7 @@ public class Commander {
 
         if (!newChannelIDs.isEmpty() || !newChannelNames.isEmpty()) {
             try {
-                UserList userList = lembot.getUsers(newChannelIDs, newChannelNames);
+                UserList userList = lembot.getUsers(newChannelIDs.isEmpty()? null : newChannelIDs, newChannelNames.isEmpty()? null : newChannelNames);
                 List<com.github.twitch4j.helix.domain.User> users = userList.getUsers();
 
                 for (com.github.twitch4j.helix.domain.User u : users) {
@@ -477,7 +478,7 @@ public class Commander {
             }
         }
 
-        for (Long l : newChannelIDs) {
+        for (String l : newChannelIDs) {
             response.append("Channel with ID: ").append(l).append(" cannot be found.\n");
 
             if (response.length() > 1500) {
