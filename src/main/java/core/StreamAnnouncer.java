@@ -103,6 +103,7 @@ public class StreamAnnouncer {
                         }
 
                         for (String l : allChannels) {
+                            System.out.println(l);
                             ChannelDels cd = channels.get(l);
                             Integer removeFlag = cd.getRemove_flag();
                             if (removeFlag > 2) {
@@ -119,15 +120,27 @@ public class StreamAnnouncer {
                     try {
                         List<Stream> streams = new ArrayList<>();
                         List<Stream> moreStreams;
-                        List<List<String>> gameIdz = ListUtils.partition(gameIDs, 100);
-                        for (List<String> gameCodes : gameIdz) {
+                        List<List<String>> gameIdz = ListUtils.partition(gameIDs, 10);
+                        if (!gameIdz.isEmpty()) {
+                            for (List<String> gameCodes : gameIdz) {
+                                String pagination = "";
+                                do {
+                                    StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<>(channels.keySet()));
+                                    pagination = resultList.getPagination().getCursor();
+                                    moreStreams = resultList.getStreams();
+                                    streams.addAll(moreStreams);
+                                    System.out.println("Iteration in guild " + g.getGuild_id());
+                                } while (!moreStreams.isEmpty());
+                            }
+                        }
+                        else {
                             String pagination = "";
                             do {
-                                StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<String>(channels.keySet()));
+                                StreamList resultList = lembot.getStreams(pagination, null, new ArrayList<>(channels.keySet()));
                                 pagination = resultList.getPagination().getCursor();
                                 moreStreams = resultList.getStreams();
+                                System.out.println(moreStreams.get(0).getUserId());
                                 streams.addAll(moreStreams);
-                                System.out.println("Iteration in guild " + g.getGuild_id());
                             } while (!moreStreams.isEmpty());
                         }
 

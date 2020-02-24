@@ -70,10 +70,10 @@ public class Commander {
 
                     try {
                         Long channelID = Long.parseLong(command[1]);
+                        TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(channelID)).block();
+                        if (!channelID.equals(announce_channel.getId().asLong())) throw new Exception("Text channel " + announce_channel.getName() + " could not be found");
                         dbHandler.setAnnounceChannel(guild.getId().asLong(), channelID);
-                        Channel announce_channel = lembot.getDiscordClient().getChannelById(Snowflake.of(channelID)).block();
-                        TextChannel announce_channel2 = (TextChannel) announce_channel;
-                        lembot.sendMessage(channel, "The announcement channel has been set to: " + announce_channel2.getName());
+                        lembot.sendMessage(channel, "The announcement channel has been set to: <#" + channelID + ">");
 
                         try {
                             guildStructure.getAnnouncer().getStreamSemaphore().acquire();
@@ -84,7 +84,7 @@ public class Commander {
                         guildStructure.getAnnouncer().getStreamSemaphore().release();
                     } catch (NumberFormatException e) {
                         lembot.sendMessage(channel, "The provided channelID is not an integer.");
-                    } catch (ClientException de) {
+                    } catch (Exception e) {
                         lembot.sendMessage(channel, "The provided channelID is not valid.");
                     }
                     break;
@@ -381,7 +381,7 @@ public class Commander {
                     lembot.sendMessage(channel, "https://github.com/Lembox/lembot"); // till tables are possible for Discord messages :/
                     break;
                 case "status":
-                    lembot.sendMessage(channel, "Lembot is online announcing selected Twitch channels streaming selected games, last update: 10.07.2019");
+                    lembot.sendMessage(channel, "Lembot is online announcing selected Twitch channels streaming selected games, last update: 25.02.2020");
                     break;
                 default:
                     reactionFlag = false;
