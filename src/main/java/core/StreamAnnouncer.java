@@ -201,7 +201,7 @@ public class StreamAnnouncer {
                                         cd.setTitle(s.getTitle());
                                         cd.setGameID(s.getGameId());
 
-                                        unfilteredGameIDs.add(String.valueOf(s.getGameId()));
+                                        unfilteredGameIDs.add(s.getGameId());
                                         unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
                                     }
                                 }
@@ -218,6 +218,10 @@ public class StreamAnnouncer {
 
                     if (!setGameFilters && !unfilteredGameIDs.isEmpty()) {
                         try {
+                            System.out.println("I'm here talking about gaemz");
+                            for (String s : unfilteredGameIDs) {
+                                System.out.println(s);
+                            }
                             GameList resultGameList = lembot.getGames(unfilteredGameIDs, null);
                             List<Game> gameList = resultGameList.getGames();
 
