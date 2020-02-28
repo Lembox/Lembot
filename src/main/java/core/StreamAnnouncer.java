@@ -49,8 +49,6 @@ public class StreamAnnouncer {
 
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
-        System.out.println(g.getAnnounce_channel());
-
         if (g.getAnnounce_channel() != null) {
             TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
 
@@ -103,7 +101,6 @@ public class StreamAnnouncer {
                         }
 
                         for (String l : allChannels) {
-                            System.out.println(l);
                             ChannelDels cd = channels.get(l);
                             Integer removeFlag = cd.getRemove_flag();
                             if (removeFlag > 2) {
@@ -129,8 +126,7 @@ public class StreamAnnouncer {
                                     pagination = resultList.getPagination().getCursor();
                                     moreStreams = resultList.getStreams();
                                     streams.addAll(moreStreams);
-                                    System.out.println("Iteration in guild " + g.getGuild_id());
-                                } while (!moreStreams.isEmpty());
+                                } while (!moreStreams.isEmpty() && !pagination.equals("IA"));
                             }
                         }
                         else {
@@ -139,9 +135,8 @@ public class StreamAnnouncer {
                                 StreamList resultList = lembot.getStreams(pagination, null, new ArrayList<>(channels.keySet()));
                                 pagination = resultList.getPagination().getCursor();
                                 moreStreams = resultList.getStreams();
-                                System.out.println(moreStreams.get(0).getUserId());
                                 streams.addAll(moreStreams);
-                            } while (!moreStreams.isEmpty());
+                            } while (!moreStreams.isEmpty() && !pagination.equals("IA"));
                         }
 
                         for (Stream s : streams) {
