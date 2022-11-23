@@ -1,11 +1,11 @@
 package core;
 
-import discord4j.core.object.entity.Guild;
-import discord4j.core.object.entity.Message;
-import discord4j.core.object.entity.User;
 import models.ChannelDels;
 import models.GuildStructure;
 
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,40 +82,40 @@ public class DBHandler {
         }
     }
 
-    public void addTableForGuild(Guild guild) {
-        String table_name = "g" + guild.getId().asLong();
+    public void addTableForGuild(Server guild) {
+        String table_name = "g" + guild.getId();
 
         try (PreparedStatement s_add = conn.prepareStatement("CREATE TABLE IF NOT EXISTS " + table_name + " (channel_ID STRING PRIMARY KEY NOT NULL, name STRING NOT NULL, live INTEGER, post_id INTEGER, title STRING, game STRING, gameID STRING, offline_flag INTEGER);")) {
             s_add.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding table for guild {} (id: {}) failed", guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding table for guild {} (id: {}) failed", guild.getName(), guild.getId(), se);
         }
     }
 
-    public void addOwnerAsMaintainer(Guild guild) {
+    public void addOwnerAsMaintainer(Server guild) {
         try (PreparedStatement s_addM = conn.prepareStatement("INSERT INTO maintainers VALUES(?, ?)")) {
-            s_addM.setLong(1, guild.getId().asLong());
-            s_addM.setLong(2, guild.getOwner().block().getId().asLong());
+            s_addM.setLong(1, guild.getId());
+            s_addM.setLong(2, guild.getOwner().get().getId());
 
             s_addM.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding owner from guild {} (id: {}) as maintainer failed", guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding owner from guild {} (id: {}) as maintainer failed", guild.getName(), guild.getId(), se);
         }
     }
 
     public void addMaintainerForGuild(Message message, Long userID) {
-        Guild guild = message.getGuild().block();
+        Server guild = message.getServer().get();
 
         try (PreparedStatement s_addM = conn.prepareStatement("INSERT INTO maintainers VALUES(?, ?)")) {
-            s_addM.setLong(1, guild.getId().asLong());
+            s_addM.setLong(1, guild.getId());
             s_addM.setLong(2, userID);
 
             s_addM.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding maintainer {} for guild {} (id: {}) failed", userID, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding maintainer {} for guild {} (id: {}) failed", userID, guild.getName(), guild.getId(), se);
         }
     }
 
@@ -139,56 +139,56 @@ public class DBHandler {
     }
 
     public Boolean isMaintainer(Message message) {
-        Guild guild = message.getGuild().block();
-        User author = message.getAuthor().get();
+        Server guild = message.getServer().get();
+        User author = message.getAuthor().asUser().get();
 
         try (PreparedStatement s_chk = conn.prepareStatement("SELECT user_id FROM maintainers WHERE guild_id = ? AND user_id = ?")) {
-            s_chk.setLong(1, guild.getId().asLong());
-            s_chk.setLong(2, author.getId().asLong());
+            s_chk.setLong(1, guild.getId());
+            s_chk.setLong(2, author.getId());
 
             try (ResultSet rs = s_chk.executeQuery()) {
                 return rs.next();
             }
         }
         catch (SQLException se) {
-            dbLogger.error("Checking whether or not {} (id: {}) is maintainer for guild {} (id: {}) failed", author.getUsername(), author.getId().asLong(), guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Checking whether or not {} (id: {}) is maintainer for guild {} (id: {}) failed", author.getName(), author.getId(), guild.getName(), guild.getId(), se);
         }
 
         return false;
     }
 
     public void deleteMaintainerForGuild(Message message, Long userID) {
-        Guild guild = message.getGuild().block();
+        Server guild = message.getServer().get();
 
         try (PreparedStatement s_delM = conn.prepareStatement("DELETE FROM maintainers WHERE guild_id = ? AND user_id = ?")) {
-            s_delM.setLong(1, guild.getId().asLong());
+            s_delM.setLong(1, guild.getId());
             s_delM.setLong(2, userID);
 
             s_delM.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Deleting maintainer {} for guild {} (id: {}) failed", userID, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Deleting maintainer {} for guild {} (id: {}) failed", userID, guild.getName(), guild.getId(), se);
         }
     }
 
-    public void addGuild(Guild guild) {
+    public void addGuild(Server guild) {
         try (PreparedStatement s_addG = conn.prepareStatement("INSERT INTO guilds VALUES (?,?,?,?,?)")) {
-            s_addG.setLong(1, guild.getId().asLong());
+            s_addG.setLong(1, guild.getId());
             s_addG.setString(2, guild.getName());
-            s_addG.setLong(3, guild.getChannels().blockFirst().getId().asLong());
+            s_addG.setLong(3, guild.getChannels().get(0).getId());
             s_addG.setInt(4, 0);
             s_addG.setInt(5, 1); // embed by default
 
             s_addG.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding guild {} (id: {}) failed", guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding guild {} (id: {}) failed", guild.getName(), guild.getId(), se);
         }
     }
 
-    public Long getGuild(Guild guild) {
+    public Long getGuild(Server guild) {
         try (PreparedStatement s_getG = conn.prepareStatement("SELECT id FROM guilds WHERE id = ?")) {
-            s_getG.setLong(1, guild.getId().asLong());
+            s_getG.setLong(1, guild.getId());
 
             try (ResultSet rs = s_getG.executeQuery()) {
                 if (rs.next()) {
@@ -197,7 +197,7 @@ public class DBHandler {
             }
         }
         catch (SQLException se) {
-            dbLogger.error("Getting guild id for guild {} (id: {}) failed", guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Getting guild id for guild {} (id: {}) failed", guild.getName(), guild.getId(), se);
         }
         return null;
     }
@@ -264,8 +264,8 @@ public class DBHandler {
     }
 
     public void addChannelForGuild(Message message, String channelID, String channelName) {
-        Guild guild = message.getGuild().block();
-        String table_name = "g" + guild.getId().asLong();
+        Server guild = message.getServer().get();
+        String table_name = "g" + guild.getId();
 
         try (PreparedStatement s_addC = conn.prepareStatement("INSERT INTO " + table_name + "(channel_id, name) VALUES(?, ?)")) {
             s_addC.setString(1, channelID);
@@ -274,7 +274,7 @@ public class DBHandler {
             s_addC.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding channel {} (id: {}) for guild {} (id: {}) failed", channelName, channelID, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding channel {} (id: {}) for guild {} (id: {}) failed", channelName, channelID, guild.getName(), guild.getId(), se);
         }
     }
 
@@ -363,32 +363,32 @@ public class DBHandler {
         return result;
     }
 
-    public void addGameForGuild(Guild guild, String game) {
+    public void addGameForGuild(Server guild, String game) {
         try (PreparedStatement s_addG = conn.prepareStatement("INSERT INTO games VALUES(?, ?)")) {
-            s_addG.setLong(1, guild.getId().asLong());
+            s_addG.setLong(1, guild.getId());
             s_addG.setString(2, game);
 
             s_addG.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Adding game filter {} for guild {} (id: {}) failed", game, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Adding game filter {} for guild {} (id: {}) failed", game, guild.getName(), guild.getId(), se);
         }
     }
 
-    public void deleteGameForGuild(Guild guild, String game) {
+    public void deleteGameForGuild(Server guild, String game) {
         try (PreparedStatement s_delG = conn.prepareStatement("DELETE FROM games WHERE guild_id = ? AND game = ?")) {
-            s_delG.setLong(1, guild.getId().asLong());
+            s_delG.setLong(1, guild.getId());
             s_delG.setString(2, game);
 
             s_delG.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Deleting game filter {} for guild {} (id: {}) failed", game, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Deleting game filter {} for guild {} (id: {}) failed", game, guild.getName(), guild.getId(), se);
         }
     }
 
-    public void deleteChannelForGuild(Guild guild, String channelID) {
-        String table_name = "g" + guild.getId().asLong();
+    public void deleteChannelForGuild(Server guild, String channelID) {
+        String table_name = "g" + guild.getId();
 
         try (PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?")) {
             s_delC.setString(1, channelID);
@@ -396,7 +396,7 @@ public class DBHandler {
             s_delC.executeUpdate();
         }
         catch (SQLException se) {
-            dbLogger.error("Deleting channel {} for guilg {} (id: {}) failed", channelID, guild.getName(), guild.getId().asLong(), se);
+            dbLogger.error("Deleting channel {} for guilg {} (id: {}) failed", channelID, guild.getName(), guild.getId(), se);
         }
     }
 

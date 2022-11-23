@@ -3,9 +3,11 @@ package listeners;
 import commands.Commander;
 
 import core.Lembot;
-import discord4j.core.object.entity.Message;
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.event.message.MessageCreateEvent;
+import org.javacord.api.listener.message.MessageCreateListener;
 
-public class MessageHandler {
+public class MessageHandler implements MessageCreateListener {
     private Lembot lembot;
     private Commander commander;
 
@@ -13,11 +15,12 @@ public class MessageHandler {
         this.lembot = lembot;
         commander = new Commander(lembot);
     }
-
-    public void onMessageEvent(Message message) {
+    @Override
+    public void onMessageCreate(MessageCreateEvent event) {
         String prefix = "!";
+        Message message = event.getMessage();
 
-        if (message.getContent().orElse("nothing").toLowerCase().startsWith(prefix) || message.getContent().orElse("nothing").toLowerCase().equals("!config")) {
+        if (message.getContent().toLowerCase().startsWith(prefix) || message.getContent().toLowerCase().equals("!config")) {
             commander.processCommand(message, prefix);
         }
     }

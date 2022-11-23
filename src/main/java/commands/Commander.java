@@ -8,17 +8,15 @@ import com.github.twitch4j.helix.domain.UserList;
 import core.DBHandler;
 import core.Lembot;
 
-import discord4j.core.object.entity.*;
-import discord4j.core.object.reaction.ReactionEmoji;
-import discord4j.core.object.util.Image;
-import discord4j.core.object.util.Snowflake;
-import discord4j.core.spec.EmbedCreateSpec;
-import discord4j.rest.http.client.ClientException;
-
 import models.ChannelDels;
 import models.GuildStructure;
 
 import org.apache.commons.lang3.StringUtils;
+import org.javacord.api.entity.channel.Channel;
+import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.slf4j.Logger;
 
 import java.awt.*;
@@ -49,14 +47,14 @@ public class Commander {
     public void processCommand(Message message, String prefix) {
         boolean reactionFlag = true;
 
-        User sender = message.getAuthor().get();
-        Channel channel = message.getChannel().block();
-        Guild guild = message.getGuild().block();
+        User sender = message.getAuthor().asUser().orElse(null);
+        TextChannel channel = message.getChannel();
+        Server guild = message.getServer().get();
         helix = lembot.getTwitchClient().getHelix();
 
-        GuildStructure guildStructure = lembot.provideGuildStructure(guild.getId().asLong());
+        GuildStructure guildStructure = lembot.provideGuildStructure(guild.getId());
 
-        String[] command = message.getContent().get().toLowerCase().replaceFirst(prefix, "").split(" ", 2);
+        String[] command = message.getContent().toLowerCase().replaceFirst(prefix, "").split(" ", 2);
 
         if (dbHandler.isMaintainer(message)) {
             switch (command[0]) {
