@@ -19,9 +19,12 @@ import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.intent.Intent;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.server.Server;
+import org.javacord.api.exception.CannotMessageUserException;
 import org.javacord.api.exception.DiscordException;
 
+import org.javacord.api.exception.MissingPermissionsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -212,67 +215,53 @@ public class Lembot {
         }
     }
 
-    public void sendMessage(Channel channel, Consumer<EmbedCreateSpec> embedCreateSpecConsumer) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public void sendMessage(ServerTextChannel channel, EmbedBuilder embedBuilder) {
         try {
-            textChannel.createEmbed(embedCreateSpecConsumer).subscribe();
-        } catch (ClientException e) {
-            logger.error("Embedded message to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", textChannel.getName(), textChannel.getId().asLong(), textChannel.getGuild().block().getName(), textChannel.getGuild().block().getId().asLong(), e);
+            channel.sendMessage(embedBuilder);
+        } catch (Exception e) {
+            logger.error("Embedded message to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", channel.getName(), channel.getId(), channel.getServer().getName(), channel.getServer().getId(), e);
         }
     }
 
-    public Long sendMessageID(Channel channel, String message) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public Long sendMessageID(ServerTextChannel channel, String message) {
         try {
-            return textChannel.createMessage(message).block().getId().asLong();
-        } catch (ClientException e) {
-            logger.error("Message: {} to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", message, textChannel.getName(), textChannel.getId().asLong(), textChannel.getGuild().block().getName(), textChannel.getGuild().block().getId().asLong(), e);
+            return channel.sendMessage(message).get().getId();
+        } catch (Exception e) {
+            logger.error("Message: {} to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", message, channel.getName(), channel.getId(), channel.getServer().getName(), channel.getServer().getId(), e);
             return null;
         }
     }
 
-    public Long sendMessageID(Channel channel, Consumer<EmbedCreateSpec> embedCreateSpecConsumer) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public Long sendMessageID(ServerTextChannel channel, EmbedBuilder embedBuilder) {
         try {
-            return textChannel.createEmbed(embedCreateSpecConsumer).block().getId().asLong();
-        } catch (ClientException e) {
-            logger.error("Embedded message to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", textChannel.getName(), textChannel.getId().asLong(), textChannel.getGuild().block().getName(), textChannel.getGuild().block().getId().asLong(), e);
+            return channel.sendMessage(embedBuilder).get().getId();
+        } catch (Exception e) {
+            logger.error("Embedded message to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", channel.getName(), channel.getId(), channel.getServer().getName(), channel.getServer().getId(), e);
             return null;
         }
     }
 
-    public void editMessage(Channel channel, Long messageID, Consumer<EmbedCreateSpec> embedCreateSpecConsumer) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public void editMessage(ServerTextChannel channel, Long messageID, EmbedBuilder embedBuilder) {
         try {
-            textChannel.getMessageById(Snowflake.of(messageID)).block().edit(message -> message.setEmbed(embedCreateSpecConsumer)).subscribe();
-        } catch (ClientException e) {
+            channel.getMessageById(messageID).get().edit(embedBuilder);
+        } catch (Exception e) {
             logger.error("Message: {} could not be edited due to missing permissions.", messageID, e);
         }
     }
 
-    public void editMessage(Channel channel, Long messageID, String message) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public void editMessage(ServerTextChannel channel, Long messageID, String message) {
         try {
-            textChannel.getMessageById(Snowflake.of(messageID)).block().edit(messageEditSpec -> messageEditSpec.setContent(message));
-        } catch (ClientException e) {
+            channel.getMessageById(messageID).get().edit(message);
+        } catch (Exception e) {
             logger.error("Message: {} could not be edited due to missing permissions.", messageID, e);
         }
     }
 
-    public void deleteMessage(Channel channel, Long messageID) {
-        TextChannel textChannel = (TextChannel) channel;
-
+    public void deleteMessage(ServerTextChannel channel, Long messageID) {
         try {
-            textChannel.getMessageById(Snowflake.of(messageID)).block().delete().subscribe();
-        } catch (NullPointerException npe) {
+            channel.getMessageById(messageID).get().delete();
+        } catch (Exception npe) {
             logger.error("Message: {} could not be deleted due to an error", messageID, npe);
-        } catch (ClientException e) {
-            logger.error("Message: {} could not be deleted due to missing permissions.", messageID, e);
         }
     }
 
@@ -330,9 +319,9 @@ public class Lembot {
             }
 
             try {
-                TextChannel announceChannel = (TextChannel) discordClient.getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
-                announceChannel.createMessage("The bot is going offline for a while to push an update, fix or similar.").block();
-            } catch (ClientException mpe) {
+                ServerTextChannel announceChannel = discordApi.getChannelById(g.getAnnounce_channel()).get().asServerTextChannel().get();
+                announceChannel.sendMessage("The bot is going offline for a while to push an update, fix or similar.");
+            } catch (Exception mpe) {
                 logger.error("Offtime message to annoucement channel (id: {}) from guild (id: {}) could not be sent due to missing permissions.", g.getAnnounce_channel(), g.getGuild_id(), mpe);
             }
 

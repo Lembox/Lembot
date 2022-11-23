@@ -12,6 +12,8 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import org.apache.commons.collections4.ListUtils;
+import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +47,7 @@ public class StreamAnnouncer {
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
         if (g.getAnnounce_channel() != null) {
-            TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
+            ServerTextChannel announce_channel = lembot.getDiscordApi().getChannelById(g.getAnnounce_channel()).get().asServerTextChannel().get();
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
@@ -101,7 +103,7 @@ public class StreamAnnouncer {
                             if (removeFlag > 2) {
                                 lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
                                 g.removeChannel(cd);
-                                dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
+                                dbHandler.deleteChannelForGuild(lembot.getDiscordApi().getServerById(g.getGuild_id()).get(), cd.getChannelID());
                             } else {
                                 cd.setRemove_flag(++removeFlag);
                             }
@@ -317,37 +319,37 @@ public class StreamAnnouncer {
         return streamSemaphore;
     }
 
-    private Consumer<EmbedCreateSpec> buildEmbedMessage(String channelName, String game, String title, String iconUrl) {
-        return spec -> {
-            if (game != null) {
-                spec.addField("Playing", game, true);
-            }
+    private EmbedBuilder buildEmbedMessage(String channelName, String game, String title, String iconUrl) {
+        EmbedBuilder embedBuilder = new EmbedBuilder()
+                .setAuthor(channelName + " has gone live!", "https://twitch.tv/" + channelName, twitchIcon)
+                .setColor(new Color(100, 65, 164))
+                .setTitle("https://twitch.tv/" + channelName)
+                .setUrl("https://twitch.tv/" + channelName)
+                .setThumbnail(iconUrl);
 
-            if (title != null) {
-                spec.addField("Title", title, false);
-            }
-
-            spec.setAuthor(channelName + " has gone live!", "https://twitch.tv/" + channelName, twitchIcon);
-
-            spec.setColor(new Color(100, 65, 164));
-            spec.setTitle("https://twitch.tv/" + channelName);
-            spec.setUrl("https://twitch.tv/" + channelName);
-            spec.setThumbnail(iconUrl);};
+        if (game != null) {
+            embedBuilder.addField("Playing", game);
+        }
+        if (title != null) {
+            embedBuilder.addField("Title", title);
+        }
+        return embedBuilder;
     }
 
-    private Consumer<EmbedCreateSpec> buildEmbedOffMessage(String channelName, String game, String title, String iconUrl) {
-        return spec -> {
-            if (game != null) {
-                spec.addField("Game", game, true);
-            }
+    public EmbedBuilder buildEmbedOffMessage(String channelName, String game, String title, String iconUrl) {
+        EmbedBuilder embedBuilder = new EmbedBuilder()
+                .setAuthor("[OFFLINE]: " + channelName + " was streaming", null, twitchIcon)
+                .setTitle("https://twitch.tv/" + channelName)
+                .setUrl("https://twitch.tv/" + channelName)
+                .setThumbnail(iconUrl);
 
-            if (title != null) {
-                spec.addField("Title", title, false);
-            }
-
-            spec.setAuthor("[OFFLINE]: " + channelName + " was streaming", null, twitchIcon);
-            spec.setTitle("https://twitch.tv/" + channelName);
-            spec.setUrl("https://twitch.tv/" + channelName);};
+        if (game != null) {
+            embedBuilder.addField("Game", game);
+        }
+        if (title != null) {
+            embedBuilder.addField("Title", title);
+        }
+        return embedBuilder;
     }
 
     private String buildClassicMessage(String channelName, String game, String title) {
@@ -380,27 +382,27 @@ public class StreamAnnouncer {
         return message;
     }
 
-    private Long sendClassicMessage(Channel channel, String channelName, String game, String title) {
+    private Long sendClassicMessage(ServerTextChannel channel, String channelName, String game, String title) {
         return lembot.sendMessageID(channel, buildClassicMessage(channelName, game, title));
     }
 
-    private void editClassicMessage(Channel channel, Long postID, String channelName, String game, String title) {
+    private void editClassicMessage(ServerTextChannel channel, Long postID, String channelName, String game, String title) {
         lembot.editMessage(channel, postID, buildClassicMessage(channelName, game, title));
     }
 
-    private void editClassicOffMessage(Channel channel, Long postID, String channelName, String game, String title) {
+    private void editClassicOffMessage(ServerTextChannel channel, Long postID, String channelName, String game, String title) {
         lembot.editMessage(channel, postID, buildClassicOffMessage(channelName, game, title));
     }
 
-    private Long sendEmbedMessage(Channel channel, String channelName, String game, String title, String iconUrl) {
+    private Long sendEmbedMessage(ServerTextChannel channel, String channelName, String game, String title, String iconUrl) {
         return lembot.sendMessageID(channel, buildEmbedMessage(channelName, game, title, iconUrl));
     }
 
-    private void editEmbedMessage(Channel channel, Long postID, String channelName, String game, String title, String iconUrl) {
+    private void editEmbedMessage(ServerTextChannel channel, Long postID, String channelName, String game, String title, String iconUrl) {
         lembot.editMessage(channel, postID, buildEmbedMessage(channelName, game, title, iconUrl));
     }
 
-    private void editEmbedOffMessage(Channel channel, Long postID, String channelName, String game, String title, String iconUrl) {
+    private void editEmbedOffMessage(ServerTextChannel channel, Long postID, String channelName, String game, String title, String iconUrl) {
         lembot.editMessage(channel, postID, buildEmbedOffMessage(channelName, game, title, iconUrl));
     }
 }
