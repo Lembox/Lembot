@@ -2,11 +2,6 @@ package core;
 
 import com.github.twitch4j.helix.domain.*;
 
-import discord4j.core.object.entity.Channel;
-import discord4j.core.object.entity.TextChannel;
-import discord4j.core.object.util.Snowflake;
-import discord4j.core.spec.EmbedCreateSpec;
-
 import models.GuildStructure;
 import models.ChannelDels;
 

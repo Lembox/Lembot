@@ -3,14 +3,19 @@ package listeners;
 import core.DBHandler;
 import core.Lembot;
 import core.StreamAnnouncer;
-import discord4j.core.object.entity.*;
-import discord4j.rest.http.client.ClientException;
 import models.GuildStructure;
+import org.javacord.api.entity.channel.PrivateChannel;
+import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
+import org.javacord.api.event.server.*;
+import org.javacord.api.listener.channel.server.ServerChannelDeleteListener;
+import org.javacord.api.listener.server.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class GuildHandler {
+public class GuildHandler implements ServerJoinListener, ServerLeaveListener, ServerBecomesAvailableListener, ServerBecomesUnavailableListener, ServerChangeOwnerListener, ServerChannelDeleteListener {
     private DBHandler dbHandler;
     private Lembot lembot;
 
@@ -19,12 +24,14 @@ public class GuildHandler {
         dbHandler = lembot.getDbHandler();
     }
 
-    public void onGuildJoined(Guild guild) {
+    @Override
+    public void onServerJoin(ServerJoinEvent event) {
+        Server guild = event.getServer();
         Long guild_id = dbHandler.getGuild(guild);
-        Long guildID = guild.getId().asLong();
+        Long guildID = guild.getId();
 
-        if (guild_id == null) {     // if not in DB yet then the query yields the value null
-            lembot.getLogger().info("New guild {} with name {} joined", guild.getId().asLong(), guild.getName());
+        if (guild_id == null) {
+            lembot.getLogger().info("New guild {} with name {} joined", guild.getId(), guild.getName());
             dbHandler.addTableForGuild(guild);
             dbHandler.addGuild(guild);
             dbHandler.addOwnerAsMaintainer(guild);
@@ -36,10 +43,10 @@ public class GuildHandler {
             lembot.addGuildStructure(guildStructure);
 
             try {
-                PrivateChannel privateChannelToOwner = lembot.getDiscordClient().getUserById(guild.getOwner().block().getId()).block().getPrivateChannel().block();
-                privateChannelToOwner.createMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init in a channel of your server/guild with rights for me to read and write in for more information").subscribe();
+                PrivateChannel privateChannelToOwner = lembot.getDiscordApi().getUserById(guild.getOwnerId()).get().getPrivateChannel().get();
+                privateChannelToOwner.sendMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init in a channel of your server/guild with rights for me to read and write in for more information");
             }
-            catch (ClientException e) {
+            catch (Exception e) {
                 lembot.getLogger().error("Error occured while joining guild {}", guildID, e);
             }
         }
@@ -47,43 +54,54 @@ public class GuildHandler {
             lembot.getLogger().info("Rejoined guild {} with name {}", guildID, guild.getName());
         }
     }
+    @Override
+    public void onServerLeave(ServerLeaveEvent event) {
+        Server guild = event.getServer();
+        Long guildID = guild.getId();
 
-    public void onGuildLeft(Guild guild, Boolean unavailable) {
-        Long guildID = guild.getId().asLong();
+        lembot.removeGuildStructure(guildID);
+        dbHandler.removeGuild(guildID);
+        lembot.getLogger().warn("Got kicked from guild {} with name {} and removed the structures", guildID, guild.getName());
+    }
+    @Override
+    public void onServerBecomesAvailable(ServerBecomesAvailableEvent event) {
+        Server guild = event.getServer();
+        Long guildID = guild.getId();
+    }
+    @Override
+    public void onServerBecomesUnavailable(ServerBecomesUnavailableEvent event) {
+        Server guild = event.getServer();
+        Long guildID = guild.getId();
 
-        if (!unavailable) {
-            lembot.removeGuildStructure(guildID);
-            dbHandler.removeGuild(guildID);
-            lembot.getLogger().warn("Got kicked from guild {} with name {} and removed the structures", guildID, guild.getName());
-        }
-        else {
-            lembot.getLogger().warn("Outage, can't connect to guild {} with name {}", guild, guild.getName());
-        }
+        lembot.getLogger().warn("Outage, can't connect to guild {} with name {}", guild, guild.getName());
     }
 
-    public void onGuildUpdate(Guild oldGuild, Guild newGuild) {
-        // transfer ownership??
-        dbHandler.addOwnerAsMaintainer(newGuild);
-        lembot.getLogger().info("Guild {} with name {} has a new owner who was added as maintainer", newGuild.getId().asLong(), newGuild.getName());
+    @Override
+    public void onServerChangeOwner(ServerChangeOwnerEvent event) {
+        Server guild = event.getServer();
+
+        dbHandler.addOwnerAsMaintainer(guild);
+        lembot.getLogger().info("Guild {} with name {} has a new owner who was added as maintainer", guild.getId(), guild.getName());
     }
 
-    public void onChannelDeleted(TextChannel channel) {
-        Guild guild = channel.getGuild().block();
-        Long guildID = guild.getId().asLong();
-        GuildChannel defaultChannel = guild.getChannels().blockLast();
+    @Override
+    public void onServerChannelDelete(ServerChannelDeleteEvent event) {
+        Server guild = event.getServer();
+        Long guildID = guild.getId();
+        Long channelID = event.getChannel().getId();
+        ServerTextChannel defaultChannel = guild.getChannels().get(0).asServerTextChannel().get();
 
         GuildStructure guildStructure = lembot.provideGuildStructure(guildID);
 
         try {
-            if (guildStructure.getAnnounce_channel().equals(channel.getId().asLong())) {
-                guildStructure.setAnnounce_channel(defaultChannel.getId().asLong());
-                dbHandler.setAnnounceChannel(guildID, defaultChannel.getId().asLong());
-                lembot.sendMessage(defaultChannel, "My announcement channel #" + channel.getName() + " was deleted, so it was changed to <#" + defaultChannel.getId().asLong() + ">.");
+            if (guildStructure.getAnnounce_channel().equals(channelID)) {
+                guildStructure.setAnnounce_channel(defaultChannel.getId());
+                dbHandler.setAnnounceChannel(guildID, defaultChannel.getId());
+                lembot.sendMessage(defaultChannel, "My announcement channel #" + event.getChannel().getName() + " was deleted, so it was changed to <#" + defaultChannel.getId() + ">.");
                 lembot.getLogger().info("Guild {} (id: {}) deleted the announcement channel so the default channel was set up", guild.getName(), guildID);
             }
         } catch (Exception e) {
             lembot.getLogger().warn("blubb", e);
         }
-
     }
 }

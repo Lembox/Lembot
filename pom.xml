@@ -7,7 +7,6 @@
         <slf4j.version>2.0.4</slf4j.version>
         <logback.version>1.4.5</logback.version>
         <javacord.version>3.7.0</javacord.version>
-        <discord4j.version>3.0.12</discord4j.version>
         <twitch4j.version>1.12.0</twitch4j.version>
         <sqlite-jdbc.version>3.40.0.0</sqlite-jdbc.version>
         <jackson.version>2.14.1</jackson.version>
@@ -67,25 +66,6 @@
             <artifactId>javacord</artifactId>
             <version>${javacord.version}</version>
             <type>pom</type>
-        </dependency>
-        <dependency>
-            <groupId>com.discord4j</groupId>
-            <artifactId>discord4j-core</artifactId>
-            <version>${discord4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>jackson-core</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-databind</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-annotations</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

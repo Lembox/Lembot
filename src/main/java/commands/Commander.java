@@ -13,6 +13,8 @@ import models.GuildStructure;
 
 import org.apache.commons.lang3.StringUtils;
 import org.javacord.api.entity.channel.Channel;
+import org.javacord.api.entity.channel.RegularServerChannel;
+import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.server.Server;
@@ -48,7 +50,7 @@ public class Commander {
         boolean reactionFlag = true;
 
         User sender = message.getAuthor().asUser().orElse(null);
-        TextChannel channel = message.getChannel();
+        ServerTextChannel channel = message.getServerTextChannel().get();
         Server guild = message.getServer().get();
         helix = lembot.getTwitchClient().getHelix();
 
@@ -68,9 +70,11 @@ public class Commander {
 
                     try {
                         Long channelID = Long.parseLong(command[1]);
-                        TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(channelID)).block();
-                        if (!channelID.equals(announce_channel.getId().asLong())) throw new Exception("Text channel " + announce_channel.getName() + " could not be found");
-                        dbHandler.setAnnounceChannel(guild.getId().asLong(), channelID);
+
+
+                        ServerTextChannel announce_channel = lembot.getDiscordApi().getChannelById(channelID).get().asServerTextChannel().get();
+                        if (!channelID.equals(announce_channel.getId())) throw new Exception("Text channel " + announce_channel.getName() + " could not be found");
+                        dbHandler.setAnnounceChannel(guild.getId(), channelID);
                         lembot.sendMessage(channel, "The announcement channel has been set to: <#" + channelID + ">");
 
                         try {

@@ -16,10 +16,11 @@ import listeners.MessageHandler;
 
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.intent.Intent;
+import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
-import reactor.core.scheduler.Schedulers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,6 @@ public class Lembot {
     private TwitchClient twitchClient;
 
     private DiscordApi discordApi;
-    private DiscordClient discordClient;
     private Properties properties;
     private Boolean initialized = false;
 
@@ -66,13 +66,6 @@ public class Lembot {
 
         dbHandler = new DBHandler(db_path);
         try {
-            discordClient = new DiscordClientBuilder(properties.get("discord_token").toString())
-                    .setRetryOptions(new RetryOptions(Duration.ofSeconds(5), Duration.ofSeconds(120),
-                            Integer.MAX_VALUE, Schedulers.elastic()))
-                    .build();
-
-            discordClient.login().subscribe();
-
             discordApi = new DiscordApiBuilder()
                     .setToken(properties.get("discord_token").toString())
                     .setAllNonPrivilegedIntents()
@@ -81,23 +74,11 @@ public class Lembot {
                     .join();
 
             discordApi.addListener(new MessageHandler(this));
+            discordApi.addListener(new GuildHandler(this));
+            discordApi.addListener(new DiscordHandler(this));
 
-            MessageHandler messageHandler = new MessageHandler(this);
-            GuildHandler guildHandler = new GuildHandler(this);
-            DiscordHandler discordHandler = new DiscordHandler(this);
-
-            EventDispatcher dispatcher = discordClient.getEventDispatcher();
-            dispatcher.on(MessageCreateEvent.class).subscribe(event -> messageHandler.onMessageEvent(event.getMessage()));
-            dispatcher.on(GuildCreateEvent.class).subscribe(event -> guildHandler.onGuildJoined(event.getGuild()));
-            dispatcher.on(GuildDeleteEvent.class).subscribe(event -> guildHandler.onGuildLeft(event.getGuild().orElse(null), event.isUnavailable()));
-            dispatcher.on(GuildUpdateEvent.class).subscribe(event -> guildHandler.onGuildUpdate(event.getOld().orElse(null), event.getCurrent()));
-            dispatcher.on(TextChannelDeleteEvent.class).subscribe(event -> guildHandler.onChannelDeleted(event.getChannel()));
-            dispatcher.on(DisconnectEvent.class).subscribe(discordHandler::onDisconnected);
-            dispatcher.on(ReconnectEvent.class).subscribe(discordHandler::onReconnected);
-            dispatcher.on(ReadyEvent.class).subscribe(discordHandler::onReady);
-            dispatcher.on(ResumeEvent.class).subscribe(discordHandler::onResumed);
         }
-        catch (ClientException de) {
+        catch (Exception de) {
             logger.error("Discord client could not be set up", de);
         }
 
@@ -112,15 +93,15 @@ public class Lembot {
         System.out.println("init");
         // Read necessary information from DB
         List<GuildStructure> guilds = dbHandler.getGuilds();
-        List<Guild> connected_guilds = discordClient.getGuilds().collectList().block();
+        List<Server> connected_guilds = new ArrayList<Server>(discordApi.getServers());
         Long guildID;
         List<ChannelDels> twitch_channels;
         Map<String, String> gameFilters;
 
         List<Long> connected_guildIDs = new ArrayList<>();
 
-        for (Guild guild : connected_guilds) {
-            connected_guildIDs.add(guild.getId().asLong());
+        for (Server guild : connected_guilds) {
+            connected_guildIDs.add(guild.getId());
         }
 
         try {
@@ -183,8 +164,8 @@ public class Lembot {
         return twitchClient;
     }
 
-    public DiscordClient getDiscordClient() {
-        return discordClient;
+    public DiscordApi getDiscordApi() {
+        return discordApi;
     }
 
     public DBHandler getDbHandler() {
@@ -223,12 +204,11 @@ public class Lembot {
         return null;
     }
 
-    public void sendMessage(TextChannel channel, String message) {
+    public void sendMessage(ServerTextChannel channel, String message) {
         try {
-            channel.getIdAsString()
             channel.sendMessage(message);
-        } catch (DiscordException e) {
-            logger.error("Message: {} to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", message, channel.get.getName(), textChannel.getId().asLong(), textChannel.getGuild().block().getName(), textChannel.getGuild().block().getId().asLong(), e);
+        } catch (Exception e) {
+            logger.error("Message: {} to channel {} (id: {}) from guild {} (id: {}) could not be sent due to missing permissions.", message, channel.getName(), channel.getId(), channel.getServer().getName(), channel.getServer().getId(), e);
         }
     }
 
