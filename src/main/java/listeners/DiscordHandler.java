@@ -36,6 +36,6 @@ public class DiscordHandler {
 
     public void onResumed(ResumeEvent event) {
         lembot.getLogger().info("The sessions of the Discord client were resumed");
-        lembot.getDiscordClient().updatePresence(Presence.online(Activity.playing("Grandfather III")));
+        lembot.getDiscordClient().updatePresence(Presence.online(Activity.playing("Grandfather III"))).subscribe();
     }
 }

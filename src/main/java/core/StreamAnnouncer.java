@@ -3,7 +3,6 @@ package core;
 import com.github.twitch4j.helix.domain.*;
 
 import discord4j.core.object.entity.Channel;
-import discord4j.core.object.entity.TextChannel;
 import discord4j.core.object.util.Snowflake;
 import discord4j.core.spec.EmbedCreateSpec;
 
@@ -49,10 +48,8 @@ public class StreamAnnouncer {
 
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
-        System.out.println(g.getAnnounce_channel());
-
         if (g.getAnnounce_channel() != null) {
-            TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
+            Channel announce_channel = lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
@@ -102,11 +99,11 @@ public class StreamAnnouncer {
                             throw e;
                         }
 
-                        for (String l : allChannels) {
+                        for (String l : allChannels) {      // if channel wasn't detected it gets flagged for removal - at 3 times
                             ChannelDels cd = channels.get(l);
                             Integer removeFlag = cd.getRemove_flag();
                             if (removeFlag > 2) {
-                                lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
+                                lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted or banned. It will be removed.");
                                 g.removeChannel(cd);
                                 dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
                             } else {
@@ -115,20 +112,30 @@ public class StreamAnnouncer {
                             channels.remove(l);
                         }
                     }
+                    else {  // only game filters set
+                        throw new Exception("Game filters only hasn't been programmed yet");
+                    }
 
-                    try {
+                    try {       // TODO: pagination ??
+                        List<List<String>> channelIdz = ListUtils.partition(new ArrayList<String>(channels.keySet()), 100);
                         List<Stream> streams = new ArrayList<>();
-                        List<Stream> moreStreams;
-                        List<List<String>> gameIdz = ListUtils.partition(gameIDs, 100);
-                        for (List<String> gameCodes : gameIdz) {
-                            String pagination = "";
-                            do {
-                                StreamList resultList = lembot.getStreams(pagination, gameCodes, new ArrayList<String>(channels.keySet()));
-                                pagination = resultList.getPagination().getCursor();
-                                moreStreams = resultList.getStreams();
-                                streams.addAll(moreStreams);
-                                System.out.println("Iteration in guild " + g.getGuild_id());
-                            } while (!moreStreams.isEmpty());
+                        if (setGameFilters) {
+                            List<List<String>> gameIdz = ListUtils.partition(gameIDs, 10);
+                            for (List<String> gameCodes : gameIdz) {
+                                for (String s : gameCodes) {
+                                    System.out.println(s);
+                                }
+                                for (List<String> channelIDs : channelIdz) {
+                                    StreamList resultList = lembot.getStreams("", gameCodes, channelIDs);
+                                    streams.addAll(resultList.getStreams());
+                                }
+                            }
+                        }
+                        else {
+                            for (List<String> channelIDs : channelIdz) {
+                                StreamList resultList = lembot.getStreams("", null, channelIDs);
+                                streams.addAll(resultList.getStreams());
+                            }
                         }
 
                         for (Stream s : streams) {
@@ -155,8 +162,6 @@ public class StreamAnnouncer {
                                             dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                                         }
                                         else {
-                                            System.out.println(s.getGameId());
-
                                             unfilteredGameIDs.add(String.valueOf(s.getGameId()));
                                             unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
                                         }
@@ -213,6 +218,8 @@ public class StreamAnnouncer {
                             GameList resultGameList = lembot.getGames(unfilteredGameIDs, null);
                             List<Game> gameList = resultGameList.getGames();
 
+                            System.out.println("Did it diedededed?");
+
                             Map<String, String> games = new HashMap<>();
                             for (Game g : gameList) {
                                 games.put(g.getId(), g.getName());
@@ -235,13 +242,14 @@ public class StreamAnnouncer {
                                 channels.remove(l);
                             }
 
+                            /*
                             UserList userList = lembot.getUsers(new ArrayList<String>(gameStreams.keySet()), null);
                             List<User> resultUserList = userList.getUsers();
                             for (User u : resultUserList) {
                                 ChannelDels cDel = gameStreams.get(u.getId());
                                 g.addChannel(u);
 
-                            }
+                            } */
                         } catch (Exception e) {
                             announcerLogger.error("Error occured in Game check for guild {}.", g.getGuild_id(), e);
                             throw e;
@@ -321,7 +329,6 @@ public class StreamAnnouncer {
             }
 
             spec.setAuthor(channelName + " has gone live!", "https://twitch.tv/" + channelName, twitchIcon);
-
             spec.setColor(new Color(100, 65, 164));
             spec.setTitle("https://twitch.tv/" + channelName);
             spec.setUrl("https://twitch.tv/" + channelName);

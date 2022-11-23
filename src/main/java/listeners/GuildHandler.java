@@ -36,7 +36,8 @@ public class GuildHandler {
             lembot.addGuildStructure(guildStructure);
 
             try {
-                PrivateChannel privateChannelToOwner = lembot.getDiscordClient().getUserById(guild.getOwner().block().getId()).block().getPrivateChannel().block();
+                PrivateChannel privateChannelToOwner = guild.getOwner().block().getPrivateChannel().block();
+                assert privateChannelToOwner != null;
                 privateChannelToOwner.createMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init in a channel of your server/guild with rights for me to read and write in for more information").subscribe();
             }
             catch (ClientException e) {

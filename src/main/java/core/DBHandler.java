@@ -307,7 +307,7 @@ public class DBHandler {
         }
     }
 
-    void updateChannelForGuild(Long guildID, String channelID, String channelName, Integer live, Long postID, String title, String game, String gameID, Integer offline_flag) {
+    public void updateChannelForGuild(Long guildID, String channelID, String channelName, Integer live, Long postID, String title, String game, String gameID, Integer offline_flag) {
         String table_name = "g" + guildID;
         try (PreparedStatement s_updC = conn.prepareStatement("UPDATE " + table_name + " SET name = ?, live = ?, post_id = ?, title = ?, game = ?, gameID = ?, offline_flag = ? WHERE channel_id = ?")) {
             s_updC.setString(1, channelName);
@@ -387,16 +387,33 @@ public class DBHandler {
         }
     }
 
-    public void deleteChannelForGuild(Guild guild, String channelID) {
-        String table_name = "g" + guild.getId().asLong();
+ /*   public void deleteChannelForGuild(GuildUpdateData guild, String channelID) {
+        if (guild != null) {
+            String table_name = "g" + guild.id();
 
-        try (PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?")) {
-            s_delC.setString(1, channelID);
+            try (PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?")) {
+                s_delC.setString(1, channelID);
 
-            s_delC.executeUpdate();
+                s_delC.executeUpdate();
+            }
+            catch (SQLException se) {
+                dbLogger.error("Deleting channel {} for guilg {} (id: {}) failed", channelID, guild.name(), Long.parseLong(guild.id()), se);
+            }
         }
-        catch (SQLException se) {
-            dbLogger.error("Deleting channel {} for guilg {} (id: {}) failed", channelID, guild.getName(), guild.getId().asLong(), se);
+    } */
+
+    public void deleteChannelForGuild(Guild guild, String channelID) {
+        if (guild != null) {
+            String table_name = "g" + guild.getId().asLong();
+
+            try (PreparedStatement s_delC = conn.prepareStatement("DELETE FROM " + table_name + " WHERE channel_id = ?")) {
+                s_delC.setString(1, channelID);
+
+                s_delC.executeUpdate();
+            }
+            catch (SQLException se) {
+                dbLogger.error("Deleting channel {} for guilg {} (id: {}) failed", channelID, guild.getName(), guild.getId().asLong(), se);
+            }
         }
     }
 

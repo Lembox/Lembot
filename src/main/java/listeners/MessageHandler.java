@@ -17,7 +17,7 @@ public class MessageHandler {
     public void onMessageEvent(Message message) {
         String prefix = "!";
 
-        if (message.getContent().orElse("nothing").toLowerCase().startsWith(prefix) || message.getContent().orElse("nothing").toLowerCase().equals("!config")) {
+        if (message.getContent().orElse("").toLowerCase().startsWith(prefix) || message.getContent().orElse("").toLowerCase().equals("!config")) {
             commander.processCommand(message, prefix);
         }
     }

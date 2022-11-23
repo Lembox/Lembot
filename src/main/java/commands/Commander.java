@@ -56,7 +56,7 @@ public class Commander {
 
         GuildStructure guildStructure = lembot.provideGuildStructure(guild.getId().asLong());
 
-        String[] command = message.getContent().get().toLowerCase().replaceFirst(prefix, "").split(" ", 2);
+        String[] command = message.getContent().orElse("").toLowerCase().replaceFirst(prefix, "").split(" ", 2);
 
         if (dbHandler.isMaintainer(message)) {
             switch (command[0]) {
@@ -65,15 +65,12 @@ public class Commander {
                     break;
                 case "set_announce":
                     // in case it's of the form #channel - otherwise nothing happens
-                    command[1] = command[1].replace("<#", "");
-                    command[1] = command[1].replace(">", "");
+                    command[1] = command[1].replace("<#", "").replace("!", "").replace(">", "");
 
                     try {
                         Long channelID = Long.parseLong(command[1]);
                         dbHandler.setAnnounceChannel(guild.getId().asLong(), channelID);
-                        Channel announce_channel = lembot.getDiscordClient().getChannelById(Snowflake.of(channelID)).block();
-                        TextChannel announce_channel2 = (TextChannel) announce_channel;
-                        lembot.sendMessage(channel, "The announcement channel has been set to: " + announce_channel2.getName());
+                        lembot.sendMessage(channel, "The announcement channel has been set to: <#" + channelID + ">");
 
                         try {
                             guildStructure.getAnnouncer().getStreamSemaphore().acquire();
@@ -86,6 +83,8 @@ public class Commander {
                         lembot.sendMessage(channel, "The provided channelID is not an integer.");
                     } catch (ClientException de) {
                         lembot.sendMessage(channel, "The provided channelID is not valid.");
+                    } catch (NullPointerException npe) {
+                        lembot.sendMessage(channel, "The channel does not exist.");
                     }
                     break;
                 case "set_message":
@@ -120,14 +119,15 @@ public class Commander {
                         }
 
                         embedCreateSpec.setColor(new Color(114,137,218));
+
+                        System.out.println(lembot.getDiscordClient().getApplicationInfo().block().getIcon(Image.Format.PNG).orElse(""));
                         embedCreateSpec.setThumbnail(lembot.getDiscordClient().getApplicationInfo().block().getIcon(Image.Format.PNG).orElse(""));
                     });
                     break;
                 case "maintainer_add":
                     if (sender.getId().asLong() == guild.getOwner().block().getId().asLong()) {
                         // in case it's of the form @userName - otherwise nothing happens
-                        command[1] = command[1].replace("<@", "");
-                        command[1] = command[1].replace(">", "");
+                        command[1] = command[1].replace("<@", "").replace("!", "").replace(">", "");
 
                         try {
                             dbHandler.addMaintainerForGuild(message, Long.parseLong(command[1]));
@@ -163,9 +163,30 @@ public class Commander {
 
                     for (Long l : maintainers) {
                         stringBuilder.append(lembot.getDiscordClient().getUserById(Snowflake.of(l)).block().getUsername()).append("\n");
+              //                  lembot.getDiscordClient().getUserById(Snowflake.of(l)).getData().block().username()).append("\n");
+    //                            .getUsername()).append("\n");
                     }
 
                     lembot.sendMessage(channel, stringBuilder.toString());
+                    break;
+                case "force_offline":
+                    if (sender.getId().asLong() == guild.getOwner().block().getId().asLong()) {
+                        String[] arguments = command[1].split("\\|");
+                        try {
+                            guildStructure.getAnnouncer().getStreamSemaphore().acquire();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        for (String a : arguments) {
+                            ChannelDels cd = findChannelDelsWithIDAlreadyThere(guildStructure, Long.parseLong(a));
+                            if (cd.getLive()) {
+                                cd.setLive(false);
+                            }
+                            dbHandler.updateChannelForGuild(guild.getId().asLong(),a, cd.getName(), 0, 0L, cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                            lembot.sendMessage(channel, cd.getName() + " has been set offline");
+                        }
+                        guildStructure.getAnnouncer().getStreamSemaphore().release();
+                    }
                     break;
                 case "game_add":
                     try {
@@ -381,7 +402,7 @@ public class Commander {
                     lembot.sendMessage(channel, "https://github.com/Lembox/lembot"); // till tables are possible for Discord messages :/
                     break;
                 case "status":
-                    lembot.sendMessage(channel, "Lembot is online announcing selected Twitch channels streaming selected games, last update: 10.07.2019");
+                    lembot.sendMessage(channel, "Lembot is online announcing selected Twitch channels streaming selected games, last update: 31.05.2020");
                     break;
                 default:
                     reactionFlag = false;
@@ -642,7 +663,7 @@ public class Commander {
         List<ChannelDels> twitch_channels = guildStructure.getTwitch_channels();
 
         for (ChannelDels cd : twitch_channels) {
-            if (cd.getChannelID().equals(channelID)) {
+            if (cd.getChannelID().equals(String.valueOf(channelID))) {
                 return cd;
             }
         }
