@@ -1,5 +1,5 @@
 # Lembot
-A bot for Discord guilds/servers based on the open source libraries [Twitch4J](https://github.com/twitch4j/twitch4j), [Discord4J](https://github.com/Discord4J/Discord4J) and [SQLite JDBC](https://github.com/xerial/sqlite-jdbc), using [SLF4J](https://github.com/qos-ch/slf4j) and [logback](https://github.com/qos-ch/logback) as logging framework, which can announce twitch streams streaming certain games if needed.
+A bot for Discord guilds/servers based on the open source libraries [Twitch4J](https://github.com/twitch4j/twitch4j), [Javacord](https://github.com/Javacord/Javacord) and [SQLite JDBC](https://github.com/xerial/sqlite-jdbc), using [SLF4J](https://github.com/qos-ch/slf4j) and [logback](https://github.com/qos-ch/logback) as logging framework, which can announce twitch streams streaming certain games if needed.
 
 ## Setup:
 
