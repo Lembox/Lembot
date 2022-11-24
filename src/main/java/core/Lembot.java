@@ -16,24 +16,19 @@ import listeners.MessageHandler;
 
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.channel.PrivateChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
-import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.intent.Intent;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.server.Server;
-import org.javacord.api.exception.CannotMessageUserException;
-import org.javacord.api.exception.DiscordException;
 
-import org.javacord.api.exception.MissingPermissionsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Semaphore;
-import java.util.function.Consumer;
 
 public class Lembot {
     private TwitchClient twitchClient;
@@ -90,6 +85,8 @@ public class Lembot {
                 .withClientSecret(properties.get("twitch_clientSecret").toString())
                 .withEnableHelix(true)
                 .build();
+
+        init();
     }
 
     public void init() {
@@ -122,6 +119,7 @@ public class Lembot {
                 removeGuildStructure(guildID);
             }
             else {
+                connected_guildIDs.remove(guildID); // remove guild that is already connected
                 twitch_channels = new ArrayList<>(dbHandler.getChannelsForGuild(guildID));
                 List<String> filterList = new ArrayList<>(dbHandler.getGamesForGuild(guildID));
 
@@ -154,6 +152,36 @@ public class Lembot {
                 g.setLembot(this);
                 g.setAnnouncer(new StreamAnnouncer(g));
                 allChannels.add(g);
+            }
+        }
+
+        // guilds that are connected but not in DB
+        for (Long guild_id : connected_guildIDs) {
+            Server guild = discordApi.getServerById(guild_id).get();
+            Long guild_id_in_db = dbHandler.getGuild(guild);
+
+            if (guild_id_in_db == null) {
+                getLogger().info("New guild {} with name {} joined", guild.getId(), guild.getName());
+                dbHandler.addTableForGuild(guild);
+                dbHandler.addGuild(guild);
+                dbHandler.addOwnerAsMaintainer(guild);
+
+                Long announce_channel = null;
+
+                GuildStructure guildStructure = new GuildStructure(guild_id, new ArrayList<>(), new HashMap<>(), announce_channel, this);
+                guildStructure.setAnnouncer(new StreamAnnouncer(guildStructure));
+                addGuildStructure(guildStructure);
+
+                try {
+                    PrivateChannel privateChannelToOwner = getDiscordApi().getUserById(guild.getOwnerId()).get().getPrivateChannel().get();
+                    privateChannelToOwner.sendMessage("Thanks for inviting me to " + guild.getName() + ". Be sure to set me up properly, use the command !init in a channel of your server/guild with rights for me to read and write in for more information");
+                }
+                catch (Exception e) {
+                    getLogger().error("Error occured while joining guild {}", guild_id, e);
+                }
+            }
+            else {
+                getLogger().info("Rejoined guild {} with name {}", guild_id, guild.getName());
             }
         }
 

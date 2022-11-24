@@ -12,12 +12,8 @@ import models.ChannelDels;
 import models.GuildStructure;
 
 import org.apache.commons.lang3.StringUtils;
-import org.javacord.api.entity.channel.Channel;
-import org.javacord.api.entity.channel.RegularServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
-import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.Embed;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
@@ -29,7 +25,6 @@ import java.net.URLEncoder;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.Semaphore;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class Commander {

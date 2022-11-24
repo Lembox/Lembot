@@ -9,7 +9,6 @@ import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
 
 import org.apache.commons.collections4.ListUtils;
 import org.javacord.api.entity.channel.ServerTextChannel;
