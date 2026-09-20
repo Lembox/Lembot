@@ -66,7 +66,16 @@ public class GuildStructure {
     }
 
     public void addChannel(User u) {
-        twitch_channels.add(new ChannelDels(u.getId(), u.getDisplayName(), false, null, "title", "game",0L, 0));
+        twitch_channels.add(new ChannelDels(
+                Long.parseLong(u.getId()),
+                u.getDisplayName(),
+                false,
+                null,
+                "title",
+                "game",
+                0L,
+                0
+        ));
         sortChannels();
     }
 

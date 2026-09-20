@@ -1,7 +1,6 @@
 package listeners;
 
 import commands.Commander;
-
 import core.Lembot;
 import discord4j.core.object.entity.Message;
 
@@ -17,9 +16,10 @@ public class MessageHandler {
     public void onMessageEvent(Message message) {
         String prefix = "!";
 
-        if (message.getContent().orElse("nothing").toLowerCase().startsWith(prefix) || message.getContent().orElse("nothing").toLowerCase().equals("!config")) {
+        String content = message.getContent();
+
+        if (content.startsWith(prefix)) {
             commander.processCommand(message, prefix);
         }
     }
-
 }

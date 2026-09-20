@@ -6,8 +6,8 @@ import discord4j.core.event.domain.lifecycle.DisconnectEvent;
 import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.event.domain.lifecycle.ReconnectEvent;
 import discord4j.core.event.domain.lifecycle.ResumeEvent;
-import discord4j.core.object.presence.Activity;
-import discord4j.core.object.presence.Presence;
+import discord4j.core.object.presence.ClientActivity;
+import discord4j.core.object.presence.ClientPresence;
 
 public class DiscordHandler {
     private Lembot lembot;
@@ -28,7 +28,15 @@ public class DiscordHandler {
 
     public void onReady(ReadyEvent event) {
         lembot.getLogger().info("Discord client is ready");
-        lembot.getDiscordClient().updatePresence(Presence.online(Activity.playing("Grandfather III"))).subscribe();
+
+        lembot.getGatewayDiscordClient()
+                .updatePresence(
+                        ClientPresence.online(
+                                ClientActivity.playing("Grandfather III")
+                        )
+                )
+                .subscribe();
+
         if (!lembot.isInitialized()) {
             lembot.init();
         }
@@ -36,6 +44,13 @@ public class DiscordHandler {
 
     public void onResumed(ResumeEvent event) {
         lembot.getLogger().info("The sessions of the Discord client were resumed");
-        lembot.getDiscordClient().updatePresence(Presence.online(Activity.playing("Grandfather III")));
+
+        lembot.getGatewayDiscordClient()
+                .updatePresence(
+                        ClientPresence.online(
+                                ClientActivity.playing("Grandfather III")
+                        )
+                )
+                .subscribe();
     }
 }

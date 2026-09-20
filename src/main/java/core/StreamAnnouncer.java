@@ -1,23 +1,30 @@
 package core;
 
-import com.github.twitch4j.helix.domain.*;
+import com.github.twitch4j.helix.domain.Game;
+import com.github.twitch4j.helix.domain.GameList;
+import com.github.twitch4j.helix.domain.Stream;
+import com.github.twitch4j.helix.domain.StreamList;
+import com.github.twitch4j.helix.domain.User;
+import com.github.twitch4j.helix.domain.UserList;
 
-import discord4j.core.object.entity.Channel;
-import discord4j.core.object.entity.TextChannel;
-import discord4j.core.object.util.Snowflake;
+import discord4j.common.util.Snowflake;
+import discord4j.core.object.entity.channel.Channel;
+import discord4j.core.object.entity.channel.TextChannel;
 import discord4j.core.spec.EmbedCreateSpec;
+import discord4j.core.spec.legacy.LegacyEmbedCreateSpec;
+import discord4j.rest.util.Color;
 
 import models.GuildStructure;
 import models.ChannelDels;
 
-import java.awt.*;
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.UnknownHostException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -53,7 +60,9 @@ public class StreamAnnouncer {
         announcerLogger.info("Announcer for guild {} working", g.getGuild_id());
 
         if (g.getAnnounce_channel() != null) {
-            TextChannel announce_channel = (TextChannel) lembot.getDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
+            TextChannel announce_channel = (TextChannel) lembot.getGatewayDiscordClient()
+                    .getChannelById(Snowflake.of(g.getAnnounce_channel()))
+                    .block();
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
@@ -100,7 +109,12 @@ public class StreamAnnouncer {
                         if (removeFlag > 2) {
                             lembot.sendMessage(announce_channel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
                             g.removeChannel(cd);
-                            dbHandler.deleteChannelForGuild(lembot.getDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
+                            dbHandler.deleteChannelForGuild(
+                                    lembot.getGatewayDiscordClient()
+                                            .getGuildById(Snowflake.of(g.getGuild_id()))
+                                            .block(),
+                                    cd.getChannelID()
+                            );
                         } else {
                             cd.setRemove_flag(++removeFlag);
                         }
@@ -112,16 +126,17 @@ public class StreamAnnouncer {
                         List<Stream> streams = resultList.getStreams();
 
                         for (Stream s : streams) {
+                            Long streamGameId = Long.valueOf(s.getGameId());
                             ChannelDels cd = channels.get(s.getUserId());
                             // was live and still streaming filtered game
                             if (cd.getLive()) {
-                                if (!s.getGameId().equals(cd.getGameID())) {        // streams another filtered game
-                                    cd.setGameID(s.getGameId());
+                                if (!streamGameId.equals(cd.getGameID())) {        // streams another filtered game
+                                    cd.setGameID(streamGameId);
                                     cd.setTitle(s.getTitle());
                                     cd.setOffline_flag(0);
 
                                     if (setGameFilters) {
-                                        String newGame = g.getGame_filters().get(String.valueOf(s.getGameId()));
+                                        String newGame = g.getGame_filters().get(String.valueOf(streamGameId));
 
                                         cd.setGame(newGame);
 
@@ -135,10 +150,10 @@ public class StreamAnnouncer {
                                         dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                                     }
                                     else {
-                                        System.out.println(s.getGameId());
+                                        System.out.println(streamGameId);
 
-                                        unfilteredGameIDs.add(String.valueOf(s.getGameId()));
-                                        unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
+                                        unfilteredGameIDs.add(String.valueOf(streamGameId));
+                                        unfilteredGameStreams.put(cd.getChannelID(), streamGameId);
                                     }
 
                                 } else if (!s.getTitle().equals(cd.getTitle())) {    // changed title
@@ -156,8 +171,8 @@ public class StreamAnnouncer {
                                 channels.remove(s.getUserId());
                             } else {      // was offline and went live
                                 if (setGameFilters) {
-                                    cd.setGame(g.getGame_filters().get(String.valueOf(s.getGameId())));
-                                    cd.setGameID(s.getGameId());
+                                    cd.setGame(g.getGame_filters().get(String.valueOf(streamGameId)));
+                                    cd.setGameID(streamGameId);
                                     cd.setTitle(s.getTitle());
                                     cd.setOffline_flag(0);
                                     cd.setLive(true);
@@ -171,10 +186,10 @@ public class StreamAnnouncer {
                                     channels.remove(s.getUserId());
                                 } else {
                                     cd.setTitle(s.getTitle());
-                                    cd.setGameID(s.getGameId());
+                                    cd.setGameID(streamGameId);
 
-                                    unfilteredGameIDs.add(String.valueOf(s.getGameId()));
-                                    unfilteredGameStreams.put(cd.getChannelID(), s.getGameId());
+                                    unfilteredGameIDs.add(String.valueOf(streamGameId));
+                                    unfilteredGameStreams.put(cd.getChannelID(), streamGameId);
                                 }
                             }
                         }
@@ -277,7 +292,7 @@ public class StreamAnnouncer {
         return streamSemaphore;
     }
 
-    private Consumer<EmbedCreateSpec> buildEmbedMessage(String channelName, String game, String title, String iconUrl) {
+    private Consumer<LegacyEmbedCreateSpec> buildEmbedMessage(String channelName, String game, String title, String iconUrl) {
         return spec -> {
             if (game != null) {
                 spec.addField("Playing", game, true);
@@ -287,15 +302,18 @@ public class StreamAnnouncer {
                 spec.addField("Title", title, false);
             }
 
-            spec.setAuthor(channelName + " has gone live!", "https://twitch.tv/" + channelName, twitchIcon);
+            String twitchUrl = "https://twitch.tv/" + channelName;
 
-            spec.setColor(new Color(100, 65, 164));
-            spec.setTitle("https://twitch.tv/" + channelName);
-            spec.setUrl("https://twitch.tv/" + channelName);
-            spec.setThumbnail(iconUrl);};
+            spec.setAuthor(channelName + " has gone live!", twitchUrl, twitchIcon);
+
+            spec.setColor(Color.of(100, 65, 164));
+            spec.setTitle(twitchUrl);
+            spec.setUrl(twitchUrl);
+            spec.setThumbnail(iconUrl);
+        };
     }
 
-    private Consumer<EmbedCreateSpec> buildEmbedOffMessage(String channelName, String game, String title, String iconUrl) {
+    private Consumer<LegacyEmbedCreateSpec> buildEmbedOffMessage(String channelName, String game, String title, String iconUrl) {
         return spec -> {
             if (game != null) {
                 spec.addField("Game", game, true);
@@ -305,9 +323,13 @@ public class StreamAnnouncer {
                 spec.addField("Title", title, false);
             }
 
+            String twitchUrl = "https://twitch.tv/" + channelName;
+
             spec.setAuthor("[OFFLINE]: " + channelName + " was streaming", null, twitchIcon);
-            spec.setTitle("https://twitch.tv/" + channelName);
-            spec.setUrl("https://twitch.tv/" + channelName);};
+
+            spec.setTitle(twitchUrl);
+            spec.setUrl(twitchUrl);
+        };
     }
 
     private String buildClassicMessage(String channelName, String game, String title) {
