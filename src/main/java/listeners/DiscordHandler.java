@@ -27,6 +27,35 @@ public class DiscordHandler {
     }
 
     public void onReady(ReadyEvent event) {
+
+        lembot.getLogger().info("=== DISCORD HANDLER ON READY ===");
+
+        if (lembot.getGatewayDiscordClient() == null) {
+            lembot.getLogger().error(
+                    "GatewayDiscordClient is NULL in onReady()"
+            );
+            return;
+        }
+
+        lembot.getLogger().info(
+                "Calling lembot.init()..."
+        );
+
+        lembot.init();
+
+        lembot.getLogger().info(
+                "lembot.init() returned"
+        );
+    }
+
+    /**
+
+    public void onReady(ReadyEvent event) {
+        lembot.getLogger().info("=== READY EVENT RECEIVED ===");
+        lembot.getLogger().info(
+                "Bot initialized before init(): {}",
+                lembot.isInitialized()
+        );
         lembot.getLogger().info("Discord client is ready");
 
         lembot.getGatewayDiscordClient()
@@ -40,7 +69,7 @@ public class DiscordHandler {
         if (!lembot.isInitialized()) {
             lembot.init();
         }
-    }
+    } **/
 
     public void onResumed(ResumeEvent event) {
         lembot.getLogger().info("The sessions of the Discord client were resumed");

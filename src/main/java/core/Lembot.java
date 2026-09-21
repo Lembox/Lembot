@@ -254,7 +254,22 @@ public class Lembot {
             gatewayDiscordClient
                     .on(ReadyEvent.class)
                     .subscribe(
-                            discordHandler::onReady
+                            event -> {
+                                logger.info("=== READY EVENT RECEIVED IN LEMBOT ===");
+
+                                try {
+                                    discordHandler.onReady(event);
+                                } catch (Exception e) {
+                                    logger.error(
+                                            "Exception inside DiscordHandler.onReady()",
+                                            e
+                                    );
+                                }
+                            },
+                            error -> logger.error(
+                                    "ERROR IN READY EVENT STREAM",
+                                    error
+                            )
                     );
 
             gatewayDiscordClient
@@ -262,6 +277,12 @@ public class Lembot {
                     .subscribe(
                             discordHandler::onResumed
                     );
+
+            logger.info("Calling lembot.init() directly...");
+            init();
+            logger.info("lembot.init() finished");
+
+            logger.info("Discord client initialized");
 
             logger.info(
                     "Discord client initialized"
@@ -336,9 +357,12 @@ public class Lembot {
      */
 
     public void init() {
+        logger.info("=== LEMBOT INIT START ===");
 
         List<GuildStructure> guilds =
                 dbHandler.getGuilds();
+
+        logger.info("DB returned {} guild structures", guilds.size());
 
         if (gatewayDiscordClient == null) {
 
@@ -385,6 +409,11 @@ public class Lembot {
             acquired = true;
 
             for (GuildStructure guildStructure : guilds) {
+
+                logger.info(
+                        "DB GuildStructure: {}",
+                        guildStructure.getGuild_id()
+                );
 
                 Long guildId =
                         guildStructure.getGuild_id();
@@ -494,6 +523,11 @@ public class Lembot {
                         )
                 );
 
+                logger.info(
+                        "Adding guild {} to allChannels",
+                        guildStructure.getGuild_id()
+                );
+
                 allChannels.add(
                         guildStructure
                 );
@@ -587,9 +621,8 @@ public class Lembot {
         }
     }
 
-    public GuildStructure provideGuildStructure(
-            Long guildID
-    ) {
+    public GuildStructure provideGuildStructure(Long guildID) {
+        logger.info("Looking for guild {} in allChannels ({} entries)", guildID, allChannels.size());
 
         boolean acquired = false;
 

@@ -14,6 +14,7 @@ public class MessageHandler {
     }
 
     public void onMessageEvent(Message message) {
+        lembot.getLogger().info("MESSAGE RECEIVED: {}", message.getContent());
         String prefix = "!";
 
         String content = message.getContent();
