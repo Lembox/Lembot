@@ -40,11 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
@@ -1055,83 +1051,68 @@ public class Lembot {
      * -----------------------------------------------------------------
      */
 
-    public UserList getUsers(
-            List<Long> channelIDs,
-            List<String> channelNames
-    ) throws Exception {
+    public UserList getUsers(List<Long> channelIDs, List<String> channelNames) throws Exception {
 
-        /*
-         * Twitch4J 1.27:
-         * user IDs are strings, not Longs.
-         */
         List<String> userIds = null;
+        List<String> userNames = null;
 
-        if (channelIDs != null) {
+        if (channelIDs != null && !channelIDs.isEmpty()) {
+            userIds = channelIDs.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .toList();
+        }
 
-            userIds =
-                    channelIDs.stream()
-                            .map(String::valueOf)
-                            .toList();
+        if (channelNames != null && !channelNames.isEmpty()) {
+            userNames = channelNames.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(name -> !name.isEmpty())
+                    .toList();
+        }
+
+        if (userIds == null && userNames == null) {
+            throw new IllegalArgumentException(
+                    "No Twitch channel ID or channel name was provided."
+            );
         }
 
         return twitchClient
                 .getHelix()
                 .getUsers(
-                        properties.getProperty(
-                                "twitch_oauth"
-                        ),
+                        properties.getProperty("twitch_oauth"),
                         userIds,
-                        channelNames
+                        userNames
                 )
                 .execute();
     }
 
-    public StreamList getStreams(
-            List<String> gameIDs,
-            List<Long> channelIDs
-    ) throws Exception {
+    public StreamList getStreams(List<String> gameIDs, List<Long> channelIDs) throws Exception {
 
-        /*
-         * Current Twitch Helix signature:
-         *
-         * getStreams(
-         *     authToken,
-         *     after,
-         *     before,
-         *     limit,
-         *     gameIds,
-         *     language,
-         *     userIds,
-         *     userLogins
-         * )
-         *
-         * Twitch user IDs are strings.
-         */
         List<String> userIds = null;
 
-        if (channelIDs != null) {
-
-            userIds =
-                    channelIDs.stream()
-                            .map(String::valueOf)
-                            .toList();
+        if (channelIDs != null && !channelIDs.isEmpty()) {
+            userIds = channelIDs.stream()
+                    .map(String::valueOf)
+                    .toList();
         }
 
-        return twitchClient
-                .getHelix()
-                .getStreams(
-                        properties.getProperty(
-                                "twitch_oauth"
-                        ),
-                        "",
-                        "",
-                        null,
-                        gameIDs,
-                        null,
-                        userIds,
-                        null
-                )
-                .execute();
+        List<String> validGameIds = null;
+
+        if (gameIDs != null && !gameIDs.isEmpty()) {
+            validGameIds = gameIDs;
+        }
+
+        return twitchClient.getHelix().getStreams(
+                properties.getProperty("twitch_oauth"),
+                null,           // after
+                null,           // before
+                null,           // limit
+                validGameIds,   // game IDs
+                null,           // language
+                userIds,        // user IDs
+                null            // user logins
+        ).execute();
     }
 
     public GameList getGames(

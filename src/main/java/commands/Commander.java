@@ -34,8 +34,10 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class Commander {
-    private static final String discordIcon = "https://abload.de/img/dsicordlogowzcf7.png";
-    private static final String twitchIcon = "https://abload.de/img/twitchicono8dj7.png";
+   // private static final String discordIcon = "https://abload.de/img/dsicordlogowzcf7.png";
+    private static final String discordIcon = "https://cdn.jsdelivr.net/gh/selfhst/icons/png/discord.png";
+    private static final String twitchIcon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/twitch.png";
+   // private static final String twitchIcon = "https://abload.de/img/twitchicono8dj7.png";
     private static final String githubLink = "https://github.com/lembox/lembot";
 
     private Lembot lembot;
