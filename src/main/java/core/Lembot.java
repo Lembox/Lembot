@@ -20,6 +20,8 @@ import discord4j.core.event.domain.message.MessageCreateEvent;
 
 import discord4j.core.object.entity.channel.Channel;
 import discord4j.core.object.entity.channel.TextChannel;
+import discord4j.core.object.presence.ClientActivity;
+import discord4j.core.object.presence.ClientPresence;
 import discord4j.core.spec.EmbedCreateSpec;
 import discord4j.core.spec.legacy.LegacyEmbedCreateSpec;
 import discord4j.gateway.intent.Intent;
@@ -42,7 +44,6 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 public class Lembot {
-
     private final Logger logger = LoggerFactory.getLogger(Lembot.class);
     private final List<GuildStructure> allChannels = new ArrayList<>();
     /**
@@ -52,12 +53,12 @@ public class Lembot {
     private TwitchClient twitchClient;
     private DiscordClient discordClient;
     private GatewayDiscordClient gatewayDiscordClient;
-    private Properties properties;
+    private final Properties properties;
     private Boolean initialized = false;
-    private DBHandler dbHandler;
+    private Long botOwnerId;
+    private final DBHandler dbHandler;
 
     public Lembot() {
-
         properties = new Properties();
 
         /*
@@ -67,20 +68,25 @@ public class Lembot {
          */
 
         try {
-
             properties.load(new FileReader("bot_config.txt"));
-
         } catch (IOException e) {
-
             logger.error("Config file could not be loaded", e);
         }
 
         String dbPath = properties.getProperty("db_path");
+        String ownerIdProp = properties.getProperty("bot_owner_id");
+
+        if (ownerIdProp != null && !ownerIdProp.isBlank()) {
+            try {
+                botOwnerId = Long.parseLong(ownerIdProp.trim());
+                logger.info("Bot owner ID configured: {}", botOwnerId);
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid bot_owner_id in bot_config.txt: {}", ownerIdProp);
+            }
+        }
 
         if (dbPath == null || dbPath.isBlank()) {
-
             logger.error("db_path is missing from bot_config.txt");
-
             throw new IllegalStateException("db_path is missing from bot_config.txt");
         }
 
@@ -93,7 +99,6 @@ public class Lembot {
          */
 
         try {
-
             String twitchClientId = properties.getProperty("twitch_clientID");
             String twitchClientSecret = properties.getProperty("twitch_clientSecret");
 
@@ -105,12 +110,7 @@ public class Lembot {
                 throw new IllegalStateException("twitch_clientSecret is missing from bot_config.txt");
             }
 
-            twitchClient = TwitchClientBuilder.builder()
-                    .withClientId(twitchClientId)
-                    .withClientSecret(twitchClientSecret)
-                    .withEnableHelix(true)
-                    .build();
-
+            twitchClient = TwitchClientBuilder.builder().withClientId(twitchClientId).withClientSecret(twitchClientSecret).withEnableHelix(true).build();
             logger.info("Twitch client initialized");
 
         } catch (Exception e) {
@@ -124,11 +124,9 @@ public class Lembot {
          */
 
         try {
-
             String discordToken = properties.getProperty("discord_token");
 
             if (discordToken == null || discordToken.isBlank()) {
-
                 throw new IllegalStateException("discord_token is missing from bot_config.txt");
             }
 
@@ -142,10 +140,13 @@ public class Lembot {
              * MESSAGE_CONTENT is required because the bot reads
              * message contents in MessageHandler.
              */
-            gatewayDiscordClient = discordClient.gateway().setEnabledIntents(IntentSet.nonPrivileged().or(IntentSet.of(Intent.MESSAGE_CONTENT))).login().block();
+            gatewayDiscordClient = discordClient.gateway()
+                    .setEnabledIntents(IntentSet.nonPrivileged().or(IntentSet.of(Intent.MESSAGE_CONTENT)))
+                    .setInitialPresence(shard -> ClientPresence.online(ClientActivity.playing("Grandfather 3")))
+                    .login()
+                    .block();
 
             if (gatewayDiscordClient == null) {
-
                 throw new IllegalStateException("Discord Gateway could not be initialized");
             }
 
@@ -156,17 +157,12 @@ public class Lembot {
              */
 
             MessageHandler messageHandler = new MessageHandler(this);
-
             GuildHandler guildHandler = new GuildHandler(this);
-
             DiscordHandler discordHandler = new DiscordHandler(this);
 
             gatewayDiscordClient.on(MessageCreateEvent.class).subscribe(event -> messageHandler.onMessageEvent(event.getMessage()));
-
             gatewayDiscordClient.on(GuildCreateEvent.class).subscribe(event -> guildHandler.onGuildJoined(event.getGuild()));
-
             gatewayDiscordClient.on(GuildDeleteEvent.class).subscribe(event -> guildHandler.onGuildLeft(event.getGuild().orElse(null), event.isUnavailable()));
-
             gatewayDiscordClient.on(GuildUpdateEvent.class).subscribe(event -> guildHandler.onGuildUpdate(event.getOld().orElse(null), event.getCurrent()));
 
             /*
@@ -181,11 +177,8 @@ public class Lembot {
              * type. The event registration itself is correct.
              */
             gatewayDiscordClient.on(TextChannelDeleteEvent.class).subscribe(event -> guildHandler.onChannelDeleted(event.getChannel()));
-
             gatewayDiscordClient.on(DisconnectEvent.class).subscribe(discordHandler::onDisconnected);
-
             gatewayDiscordClient.on(ReconnectEvent.class).subscribe(discordHandler::onReconnected);
-
             gatewayDiscordClient.on(ReadyEvent.class).subscribe(event -> {
                 logger.info("=== READY EVENT RECEIVED IN LEMBOT ===");
 
@@ -207,7 +200,6 @@ public class Lembot {
             logger.info("Discord client initialized");
 
         } catch (Exception e) {
-
             logger.error("Discord client could not be set up", e);
         }
     }
@@ -226,25 +218,20 @@ public class Lembot {
         logger.info("DB returned {} guild structures", guilds.size());
 
         if (gatewayDiscordClient == null) {
-
             logger.error("Cannot initialize guilds because Discord Gateway is not available");
-
             return;
         }
 
         List<discord4j.core.object.entity.Guild> connectedGuilds = gatewayDiscordClient.getGuilds().collectList().block();
 
         if (connectedGuilds == null) {
-
             logger.error("Could not retrieve connected Discord guilds");
-
             return;
         }
 
         List<Long> connectedGuildIds = new ArrayList<>();
 
         for (discord4j.core.object.entity.Guild guild : connectedGuilds) {
-
             connectedGuildIds.add(guild.getId().asLong());
         }
 
@@ -372,6 +359,8 @@ public class Lembot {
         return initialized;
     }
 
+    public Long getBotOwnerId() { return botOwnerId; }
+
     /*
      * -----------------------------------------------------------------
      * Guild structures
@@ -447,14 +436,12 @@ public class Lembot {
 
     public void sendMessage(Channel channel, String message) {
 
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
 
             logger.warn("Cannot send message because channel {} is not a TextChannel", channel);
 
             return;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         textChannel.createMessage(message).subscribe(ignored -> {
         }, error -> logger.error("Message could not be sent to channel {}", textChannel.getName(), error));
@@ -468,14 +455,12 @@ public class Lembot {
      */
     public void sendMessage(Channel channel, Consumer<EmbedCreateSpec.Builder> embedBuilderConsumer) {
 
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
 
             logger.warn("Cannot send embedded message because channel {} is not a TextChannel", channel);
 
             return;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         EmbedCreateSpec.Builder builder = EmbedCreateSpec.builder();
 
@@ -489,14 +474,12 @@ public class Lembot {
 
     public Long sendMessageID(Channel channel, String message) {
 
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
 
             logger.warn("Cannot send message because channel {} is not a TextChannel", channel);
 
             return null;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         try {
 
@@ -511,12 +494,10 @@ public class Lembot {
     }
 
     public Long sendMessageID(Channel channel, Consumer<LegacyEmbedCreateSpec> embedConsumer) {
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
             logger.warn("Cannot send embedded message because channel {} is not a TextChannel", channel);
             return null;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         try {
             return textChannel.createMessage(spec -> spec.addEmbed(embedConsumer)).block().getId().asLong();
@@ -535,11 +516,9 @@ public class Lembot {
      * This method uses the modern message-edit API.
      */
     public void editMessage(Channel channel, Long messageID, Consumer<LegacyEmbedCreateSpec> embedConsumer) {
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
             return;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         try {
             textChannel.getMessageById(Snowflake.of(messageID)).flatMap(message -> message.edit(spec -> spec.addEmbed(embedConsumer))).subscribe(ignored -> {
@@ -552,11 +531,9 @@ public class Lembot {
 
     public void editMessage(Channel channel, Long messageID, String message) {
 
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
             return;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         try {
 
@@ -571,11 +548,9 @@ public class Lembot {
 
     public void deleteMessage(Channel channel, Long messageID) {
 
-        if (!(channel instanceof TextChannel)) {
+        if (!(channel instanceof TextChannel textChannel)) {
             return;
         }
-
-        TextChannel textChannel = (TextChannel) channel;
 
         try {
 
@@ -715,18 +690,14 @@ public class Lembot {
         if (userIds != null && !userIds.isEmpty()) {
             for (int i = 0; i < userIds.size(); i += 100) {
                 List<String> batch = userIds.subList(i, Math.min(i + 100, userIds.size()));
-                StreamList res = twitchClient.getHelix().getStreams(
-                        null, null, null, null, validGameIds, null, batch, null
-                ).execute();
+                StreamList res = twitchClient.getHelix().getStreams(null, null, null, null, validGameIds, null, batch, null).execute();
 
                 if (res != null && res.getStreams() != null) {
                     allStreams.addAll(res.getStreams());
                 }
             }
         } else {
-            StreamList res = twitchClient.getHelix().getStreams(
-                    null, null, null, null, validGameIds, null, null, null
-            ).execute();
+            StreamList res = twitchClient.getHelix().getStreams(null, null, null, null, validGameIds, null, null, null).execute();
 
             if (res != null && res.getStreams() != null) {
                 allStreams.addAll(res.getStreams());
@@ -738,13 +709,9 @@ public class Lembot {
 
     public List<Game> getGames(List<String> gameIDs, List<String> gameNames) throws Exception {
 
-        List<String> validGameIds = (gameIDs != null && !gameIDs.isEmpty())
-                ? gameIDs.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList()
-                : null;
+        List<String> validGameIds = (gameIDs != null && !gameIDs.isEmpty()) ? gameIDs.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList() : null;
 
-        List<String> validGameNames = (gameNames != null && !gameNames.isEmpty())
-                ? gameNames.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList()
-                : null;
+        List<String> validGameNames = (gameNames != null && !gameNames.isEmpty()) ? gameNames.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList() : null;
 
         if (validGameIds == null && validGameNames == null) {
             return Collections.emptyList();
@@ -801,50 +768,33 @@ public class Lembot {
                 boolean streamAcquired = false;
 
                 try {
-
                     guild.getAnnouncer().getStreamSemaphore().acquire();
-
                     streamAcquired = true;
 
                     if (gatewayDiscordClient != null && guild.getAnnounce_channel() != null) {
-
                         Channel channel = gatewayDiscordClient.getChannelById(Snowflake.of(guild.getAnnounce_channel())).block();
 
                         if (channel instanceof TextChannel) {
-
                             ((TextChannel) channel).createMessage("The bot is going offline for a while to push an update, fix or similar.").block();
                         }
                     }
 
                     guild.getAnnouncer().shutdownScheduler();
-
                 } catch (InterruptedException e) {
-
                     Thread.currentThread().interrupt();
-
                     logger.error("Shutting down scheduler of guild {} failed", guild.getGuild_id(), e);
-
                 } catch (Exception e) {
-
                     logger.error("Offtime handling for guild {} failed", guild.getGuild_id(), e);
-
                 } finally {
-
                     if (streamAcquired) {
-
                         guild.getAnnouncer().getStreamSemaphore().release();
                     }
                 }
             }
-
         } catch (InterruptedException e) {
-
             Thread.currentThread().interrupt();
-
             logger.error("Announcing offtime failed", e);
-
         } finally {
-
             if (guildAcquired) {
                 guildSemaphore.release();
             }
@@ -852,11 +802,8 @@ public class Lembot {
     }
 
     public void forceShutdown() {
-
         for (GuildStructure guild : allChannels) {
-
             if (guild.getAnnouncer() != null) {
-
                 guild.getAnnouncer().shutdownScheduler();
             }
         }
@@ -867,30 +814,21 @@ public class Lembot {
     }
 
     public void restartAfterOutage() {
-
         boolean acquired = false;
 
         try {
-
             guildSemaphore.acquire();
             acquired = true;
 
             for (GuildStructure guild : allChannels) {
-
                 if (guild.getAnnouncer() != null) {
-
                     guild.getAnnouncer().restartScheduler();
                 }
             }
-
         } catch (InterruptedException e) {
-
             Thread.currentThread().interrupt();
-
             logger.error("Restarting after outage failed", e);
-
         } finally {
-
             if (acquired) {
                 guildSemaphore.release();
             }

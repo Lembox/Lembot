@@ -13,6 +13,8 @@ import discord4j.core.object.entity.channel.Channel;
 import discord4j.core.object.entity.channel.TextChannel;
 import discord4j.core.object.emoji.Emoji;
 import discord4j.common.util.Snowflake;
+import discord4j.core.object.presence.ClientActivity;
+import discord4j.core.object.presence.ClientPresence;
 import discord4j.rest.http.client.ClientException;
 import discord4j.rest.util.Color;
 import discord4j.core.spec.EmbedCreateSpec;
@@ -38,9 +40,9 @@ public class Commander {
     // private static final String twitchIcon = "https://abload.de/img/twitchicono8dj7.png";
     private static final String githubLink = "https://github.com/lembox/lembot";
 
-    private Lembot lembot;
-    private DBHandler dbHandler;
-    private Logger logger;
+    private final Lembot lembot;
+    private final DBHandler dbHandler;
+    private final Logger logger;
     private TwitchHelix helix;
 
     public Commander(Lembot lembot) {
@@ -176,33 +178,137 @@ public class Commander {
 
                     lembot.sendMessage(channel, stringBuilder.toString());
                     break;
-                case "dm_guild_owner":
+                case "dm_guild_owner": {
                     // Usage: !dm_guild_owner <guild_id> <message>
-                    if (sender.getId().asLong() == 94888667344015360L) {
-                        String[] parts = arguments.split(" ", 2);
-                        if (parts.length < 2) {
-                            lembot.sendMessage(channel, "Usage: !dm_guild_owner <guild_id> <message>");
-                            break;
-                        }
+                    if (!isBotOwner(sender)) {
+                        lembot.sendMessage(channel, "⛔ This command is restricted to the bot owner.");
+                        break;
+                    }
 
-                        try {
-                            Long targetGuildId = Long.parseLong(parts[0].trim());
-                            String textToSend = parts[1].trim();
+                    String[] parts = arguments.split(" ", 2);
+                    if (parts.length < 2) {
+                        lembot.sendMessage(channel, "Usage: `!dm_guild_owner <guild_id> <message>`");
+                        break;
+                    }
 
-                            lembot.getGatewayDiscordClient().getGuildById(Snowflake.of(targetGuildId))
-                                    .flatMap(g -> g.getOwner()
-                                            .flatMap(owner -> owner.getPrivateChannel())
-                                            .flatMap(dm -> dm.createMessage("📩 **Message from the Lembot Developer:**\n\n" + textToSend))
-                                    )
-                                    .subscribe(
-                                            success -> lembot.sendMessage(channel, "Successfully sent DM to the owner of guild `" + targetGuildId + "`!"),
-                                            err -> lembot.sendMessage(channel, "Failed to send DM: " + err.getMessage())
-                                    );
-                        } catch (NumberFormatException e) {
-                            lembot.sendMessage(channel, "Invalid Guild ID.");
-                        }
+                    try {
+                        Long targetGuildId = Long.parseLong(parts[0].trim());
+                        String textToSend = parts[1].trim();
+
+                        lembot.getGatewayDiscordClient().getGuildById(Snowflake.of(targetGuildId))
+                                .flatMap(g -> g.getOwner()
+                                        .flatMap(owner -> owner.getPrivateChannel())
+                                        .flatMap(dm -> dm.createMessage("📩 **Message from the Lembot Developer:**\n\n" + textToSend))
+                                )
+                                .subscribe(
+                                        success -> lembot.sendMessage(channel, "✅ Successfully sent DM to the owner of guild `" + targetGuildId + "`!"),
+                                        err -> lembot.sendMessage(channel, "❌ Failed to send DM: " + err.getMessage())
+                                );
+                    } catch (NumberFormatException e) {
+                        lembot.sendMessage(channel, "Invalid Guild ID.");
                     }
                     break;
+                }
+                case "presence":
+                case "set_presence": {
+                    // 1. Authenticate owner
+                    if (!isBotOwner(sender)) {
+                        lembot.sendMessage(channel, "⛔ This command is restricted to the bot owner.");
+                        break;
+                    }
+
+                    // 2. Validate arguments
+                    if (arguments.isBlank()) {
+                        lembot.sendMessage(channel, "ℹ️ **Usage:**\n" +
+                                "`!presence playing <text>`\n" +
+                                "`!presence watching <text>`\n" +
+                                "`!presence listening <text>`\n" +
+                                "`!presence competing <text>`\n" +
+                                "`!presence streaming <title>`\n" +
+                                "`!presence streaming <twitch_url> <title>`\n" +
+                                "`!presence clear`");
+                        break;
+                    }
+
+                    String[] parts = arguments.split(" ", 2);
+                    String type = parts[0].toLowerCase();
+                    String content = parts.length > 1 ? parts[1].trim() : "";
+
+                    ClientActivity activity = null;
+
+                    switch (type) {
+                        case "playing":
+                            if (content.isBlank()) {
+                                lembot.sendMessage(channel, "Please specify what you are playing. E.g.: `!presence playing !commands`");
+                                break;
+                            }
+                            activity = ClientActivity.playing(content);
+                            break;
+
+                        case "watching":
+                            if (content.isBlank()) {
+                                lembot.sendMessage(channel, "Please specify what you are watching. E.g.: `!presence watching Twitch streams`");
+                                break;
+                            }
+                            activity = ClientActivity.watching(content);
+                            break;
+
+                        case "listening":
+                            if (content.isBlank()) {
+                                lembot.sendMessage(channel, "Please specify what you are listening to. E.g.: `!presence listening to feedback`");
+                                break;
+                            }
+                            activity = ClientActivity.listening(content);
+                            break;
+
+                        case "competing":
+                            if (content.isBlank()) {
+                                lembot.sendMessage(channel, "Please specify the tournament. E.g.: `!presence competing in Speedruns`");
+                                break;
+                            }
+                            activity = ClientActivity.competing(content);
+                            break;
+
+                        case "streaming":
+                            if (content.isBlank()) {
+                                lembot.sendMessage(channel, "Usage: `!presence streaming <title>` or `!presence streaming <url> <title>`");
+                                break;
+                            }
+                            String streamUrl = "https://twitch.tv";
+                            String streamTitle = content;
+
+                            // Check if user passed an explicit stream URL first
+                            String[] streamArgs = content.split(" ", 2);
+                            if (streamArgs[0].startsWith("http://") || streamArgs[0].startsWith("https://")) {
+                                streamUrl = streamArgs[0];
+                                streamTitle = streamArgs.length > 1 ? streamArgs[1] : "Live Stream";
+                            }
+                            activity = ClientActivity.streaming(streamTitle, streamUrl);
+                            break;
+
+                        case "clear":
+                        case "reset":
+                            lembot.getGatewayDiscordClient().updatePresence(ClientPresence.online()).subscribe(
+                                    success -> lembot.sendMessage(channel, "✅ Presence cleared."),
+                                    error -> lembot.sendMessage(channel, "❌ Failed to clear presence: " + error.getMessage())
+                            );
+                            break;
+
+                        default:
+                            lembot.sendMessage(channel, "Unknown type `" + type + "`. Options: `playing`, `watching`, `listening`, `competing`, `streaming`, `clear`.");
+                            break;
+                    }
+
+                    if (activity != null) {
+                        final String finalContent = content;
+                        final String finalType = type;
+                        lembot.getGatewayDiscordClient().updatePresence(ClientPresence.online(activity)).subscribe(
+                                success -> lembot.sendMessage(channel, "✅ Bot presence updated to: **" + finalType.toUpperCase() + "** " + finalContent),
+                                error -> lembot.sendMessage(channel, "❌ Failed to update presence: " + error.getMessage())
+                        );
+                    }
+                    break;
+                }
                 case "game_add":
                     try {
                         if (!arguments.equals("")) {
@@ -737,5 +843,10 @@ public class Commander {
             spec.addField("ID", channelIDs, true);
             spec.color(Color.of(100, 65, 164));
         };
+    }
+
+    private Boolean isBotOwner(User sender) {
+        Long ownerId = lembot.getBotOwnerId();
+        return(ownerId != null && sender.getId().asLong() == ownerId);
     }
 }
