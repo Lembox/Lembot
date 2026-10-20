@@ -66,16 +66,7 @@ public class GuildStructure {
     }
 
     public void addChannel(User u) {
-        twitch_channels.add(new ChannelDels(
-                Long.parseLong(u.getId()),
-                u.getDisplayName(),
-                false,
-                null,
-                "title",
-                "game",
-                0L,
-                0
-        ));
+        twitch_channels.add(new ChannelDels(Long.parseLong(u.getId()), u.getDisplayName(), false, null, "title", "game", 0L, 0));
         sortChannels();
     }
 
@@ -132,10 +123,8 @@ public class GuildStructure {
         twitch_channels.sort(new ChannelComparator());
     }
 
-    private class ChannelComparator implements Comparator<ChannelDels>
-    {
-        public int compare(ChannelDels c1, ChannelDels c2)
-        {
+    private class ChannelComparator implements Comparator<ChannelDels> {
+        public int compare(ChannelDels c1, ChannelDels c2) {
             return c1.getName().compareTo(c2.getName());
         }
     }
