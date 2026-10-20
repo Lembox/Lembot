@@ -1080,7 +1080,7 @@ public class Lembot {
         return twitchClient
                 .getHelix()
                 .getUsers(
-                        properties.getProperty("twitch_oauth"),
+                        null,       // Twitch4J has to get the OAuth itself
                         userIds,
                         userNames
                 )
@@ -1104,7 +1104,7 @@ public class Lembot {
         }
 
         return twitchClient.getHelix().getStreams(
-                properties.getProperty("twitch_oauth"),
+                null, // default authentification with Twitch4J
                 null,           // after
                 null,           // before
                 null,           // limit
@@ -1123,9 +1123,7 @@ public class Lembot {
         return twitchClient
                 .getHelix()
                 .getGames(
-                        properties.getProperty(
-                                "twitch_oauth"
-                        ),
+                        null, // default authentification with Twitch4J
                         gameIDs,
                         gameNames
                 )
