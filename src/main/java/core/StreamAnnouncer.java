@@ -60,9 +60,7 @@ public class StreamAnnouncer {
             acquired = true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-
             announcerLogger.warn("Announcer for guild {} was interrupted before starting.", g.getGuild_id());
-
             return;
         }
 
@@ -83,34 +81,20 @@ public class StreamAnnouncer {
             }
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
-
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
-
             setGameFilters = !gameIDs.isEmpty();
 
             Map<Long, ChannelDels> channels = new HashMap<>();
-
             Map<Long, Long> unfilteredGameStreams = new HashMap<>();
-
             List<String> unfilteredGameIDs = new ArrayList<>();
 
-
-            /*
-             * Build lookup map.
-             *
-             * Our database model still uses Long for Twitch IDs,
-             * while Twitch4J 1.27 returns IDs as String.
-             */
             for (ChannelDels cd : channelDels) {
-
                 if (cd == null || cd.getChannelID() == null) {
                     announcerLogger.warn("Ignoring invalid ChannelDels entry in guild {}.", g.getGuild_id());
                     continue;
                 }
-
                 channels.put(cd.getChannelID(), cd);
             }
-
 
             /*
              * Check for changes in channels:
@@ -123,25 +107,16 @@ public class StreamAnnouncer {
             if (!allChannels.isEmpty()) {
 
                 try {
-
-                    /*
-                     * Twitch4J 1.27:
-                     * User#getId() returns String.
-                     */
                     UserList resultUserList = lembot.getUsers(allChannels, null);
-
                     List<User> userList = resultUserList.getUsers();
 
                     for (User u : userList) {
-
                         if (u == null || u.getId() == null) {
                             continue;
                         }
 
                         String userIdString = u.getId();
-
                         Long userId;
-
                         try {
                             userId = Long.valueOf(userIdString);
                         } catch (NumberFormatException e) {
@@ -150,194 +125,170 @@ public class StreamAnnouncer {
                         }
 
                         allChannels.remove(userId);
-
                         ChannelDels cd = channels.get(userId);
 
-                        /*
-                         * Twitch returned a user that does not have
-                         * a corresponding local ChannelDels entry.
-                         */
                         if (cd == null) {
-                            announcerLogger.warn("Twitch returned user {} (ID: {}), " + "but no matching ChannelDels entry exists for guild {}.", u.getDisplayName(), userId, g.getGuild_id());
+                            announcerLogger.warn("Twitch returned user {} (ID: {}), but no matching ChannelDels entry exists for guild {}.", u.getDisplayName(), userId, g.getGuild_id());
                             continue;
                         }
 
                         String curName = u.getDisplayName();
-
                         if (curName != null && !curName.equals(cd.getName())) {
-
                             cd.setName(curName);
-
                             dbHandler.updateName(g.getGuild_id(), cd.getChannelID(), cd.getName());
                         }
 
                         cd.setIconUrl(u.getProfileImageUrl());
-
                         cd.setRemove_flag(0);
                     }
 
                 } catch (Exception e) {
-
                     announcerLogger.error("Error occured at user check for guild {}.", g.getGuild_id(), e);
-
                     throw e;
                 }
 
-
-                /*
-                 * Channels that Twitch did not return are considered
-                 * potentially deleted.
-                 */
                 for (Long channelId : allChannels) {
-
                     ChannelDels cd = channels.get(channelId);
-
                     if (cd == null) {
                         continue;
                     }
 
                     Integer removeFlag = cd.getRemove_flag();
-
                     if (removeFlag == null) {
                         removeFlag = 0;
                     }
 
                     if (removeFlag > 2) {
-
-                        lembot.sendMessage(announceChannel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. " + "It will be removed.");
-
+                        lembot.sendMessage(announceChannel, "Channel " + cd.getName() + " (id: " + cd.getChannelID() + ") might have been deleted. It will be removed.");
                         g.removeChannel(cd);
-
                         dbHandler.deleteChannelForGuild(lembot.getGatewayDiscordClient().getGuildById(Snowflake.of(g.getGuild_id())).block(), cd.getChannelID());
-
                     } else {
-
                         cd.setRemove_flag(removeFlag + 1);
                     }
 
                     channels.remove(channelId);
                 }
 
-
                 /*
                  * Check currently active streams.
                  */
                 try {
-
                     StreamList resultList = lembot.getStreams(gameIDs, new ArrayList<>(channels.keySet()));
-
                     List<Stream> streams = resultList.getStreams();
 
-
                     for (Stream s : streams) {
-
                         if (s == null || s.getUserId() == null) {
                             continue;
                         }
 
-                        /*
-                         * Twitch4J 1.27:
-                         * Stream#getUserId() returns String.
-                         *
-                         * Our local map still uses Long.
-                         */
                         Long userId;
-
                         try {
                             userId = Long.valueOf(s.getUserId());
                         } catch (NumberFormatException e) {
-
                             announcerLogger.warn("Received invalid Twitch stream user ID '{}' for guild {}.", s.getUserId(), g.getGuild_id());
-
                             continue;
                         }
 
                         ChannelDels cd = channels.get(userId);
-
                         if (cd == null) {
-
-                            announcerLogger.warn("Received stream for Twitch user ID {}, " + "but no matching ChannelDels was found in guild {}.", userId, g.getGuild_id());
-
+                            announcerLogger.warn("Received stream for Twitch user ID {}, but no matching ChannelDels was found in guild {}.", userId, g.getGuild_id());
                             continue;
                         }
 
-
-                        /*
-                         * Twitch4J Stream#getGameId() also returns String.
-                         */
                         Long streamGameId = null;
-
                         if (s.getGameId() != null && !s.getGameId().isBlank()) {
-
                             try {
                                 streamGameId = Long.valueOf(s.getGameId());
                             } catch (NumberFormatException e) {
-
-                                announcerLogger.warn("Received invalid Twitch game ID '{}' " + "for channel {}.", s.getGameId(), cd.getName());
+                                announcerLogger.warn("Received invalid Twitch game ID '{}' for channel {}.", s.getGameId(), cd.getName());
                             }
                         }
 
+                        boolean isLive = Boolean.TRUE.equals(cd.getLive());
+                        boolean titleChanged = s.getTitle() != null && !s.getTitle().equals(cd.getTitle());
+                        boolean gameChanged = (streamGameId != null && !streamGameId.equals(cd.getGameID()))
+                                || (streamGameId == null && cd.getGameID() != null);
 
                         /*
                          * Channel was already live.
                          */
-                        if (Boolean.TRUE.equals(cd.getLive())) {
+                        if (isLive) {
+                            cd.setOffline_flag(0);
 
-                            if (streamGameId != null && !streamGameId.equals(cd.getGameID())) {
-
-                                cd.setGameID(streamGameId);
-                                cd.setTitle(s.getTitle());
-                                cd.setOffline_flag(0);
-
-                                if (setGameFilters) {
-
-                                    String newGame = g.getGame_filters().get(String.valueOf(streamGameId));
-
-                                    cd.setGame(newGame);
-
-                                    if (g.getMessage_style().equals(0)) {
-
-                                        editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
-
+                            if (setGameFilters) {
+                                if (gameChanged || titleChanged) {
+                                    if (streamGameId != null) {
+                                        cd.setGame(g.getGame_filters().get(String.valueOf(streamGameId)));
+                                        cd.setGameID(streamGameId);
                                     } else {
+                                        cd.setGame(null);
+                                        cd.setGameID(null);
+                                    }
 
-                                        editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                    if (s.getTitle() != null) {
+                                        cd.setTitle(s.getTitle());
+                                    }
+
+                                    if (cd.getPostID() != null && cd.getPostID() != 0) {
+                                        if (g.getMessage_style().equals(0)) {
+                                            editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                        } else {
+                                            editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                        }
                                     }
 
                                     dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                }
+                                channels.remove(userId);
 
-                                } else {
+                            } else {
+                                // NO GAME FILTERS CONFIGURED
+                                if (gameChanged) {
+                                    if (s.getTitle() != null) {
+                                        cd.setTitle(s.getTitle());
+                                    }
 
                                     if (streamGameId != null) {
-
                                         unfilteredGameIDs.add(String.valueOf(streamGameId));
-
                                         unfilteredGameStreams.put(cd.getChannelID(), streamGameId);
+                                        // Kept in channels so game resolution below can find it!
+                                    } else {
+                                        // Category was cleared (streaming without a game)
+                                        cd.setGame(null);
+                                        cd.setGameID(null);
+
+                                        if (cd.getPostID() != null && cd.getPostID() != 0) {
+                                            if (g.getMessage_style().equals(0)) {
+                                                editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                            } else {
+                                                editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                            }
+                                        }
+
+                                        dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                        channels.remove(userId);
                                     }
-                                }
 
-                            } else if (s.getTitle() != null && !s.getTitle().equals(cd.getTitle())) {
+                                } else if (titleChanged) {
+                                    // Game didn't change, only title changed
+                                    cd.setTitle(s.getTitle());
 
-                                /*
-                                 * Stream title changed.
-                                 */
-                                cd.setTitle(s.getTitle());
+                                    if (cd.getPostID() != null && cd.getPostID() != 0) {
+                                        if (g.getMessage_style().equals(0)) {
+                                            editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                        } else {
+                                            editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                        }
+                                    }
 
-                                cd.setOffline_flag(0);
-
-                                if (g.getMessage_style().equals(0)) {
-
-                                    editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                    channels.remove(userId);
 
                                 } else {
-
-                                    editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                    // Live and unchanged
+                                    channels.remove(userId);
                                 }
-
-                                dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                             }
-
-                            channels.remove(userId);
 
                         } else {
 
@@ -345,169 +296,142 @@ public class StreamAnnouncer {
                              * Channel was offline and went live.
                              */
                             if (setGameFilters) {
-
                                 cd.setGame(streamGameId == null ? null : g.getGame_filters().get(String.valueOf(streamGameId)));
-
                                 cd.setGameID(streamGameId);
-
                                 cd.setTitle(s.getTitle());
-
                                 cd.setOffline_flag(0);
                                 cd.setLive(true);
 
                                 if (g.getMessage_style().equals(0)) {
-
                                     cd.setPostID(sendClassicMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle()));
-
                                 } else {
-
                                     cd.setPostID(sendEmbedMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
                                 }
 
                                 dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
-
                                 channels.remove(userId);
 
                             } else {
-
                                 cd.setTitle(s.getTitle());
-
                                 cd.setGameID(streamGameId);
 
                                 if (streamGameId != null) {
-
                                     unfilteredGameIDs.add(String.valueOf(streamGameId));
-
                                     unfilteredGameStreams.put(cd.getChannelID(), streamGameId);
+                                } else {
+                                    cd.setGame(null);
+                                    cd.setOffline_flag(0);
+                                    cd.setLive(true);
+
+                                    if (g.getMessage_style().equals(0)) {
+                                        cd.setPostID(sendClassicMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle()));
+                                    } else {
+                                        cd.setPostID(sendEmbedMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
+                                    }
+
+                                    dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
+                                    channels.remove(userId);
                                 }
                             }
                         }
                     }
 
                 } catch (Exception e) {
-
                     announcerLogger.error("Error occured in Stream check for guild {}.", g.getGuild_id(), e);
-
                     throw e;
                 }
 
-
                 /*
                  * No game filters:
-                 *
-                 * Resolve game IDs into game names.
+                 * Resolve game IDs into game names and post/edit messages.
                  */
                 if (!setGameFilters && !unfilteredGameIDs.isEmpty()) {
 
                     try {
-
                         GameList resultGameList = lembot.getGames(unfilteredGameIDs, null);
-
                         List<Game> gameList = resultGameList.getGames();
 
                         Map<String, String> games = new HashMap<>();
-
                         for (Game game : gameList) {
-
                             games.put(game.getId(), game.getName());
                         }
 
-
                         for (Map.Entry<Long, Long> entry : unfilteredGameStreams.entrySet()) {
-
                             Long channelId = entry.getKey();
-
                             Long gameId = entry.getValue();
-
                             ChannelDels cd = channels.get(channelId);
 
                             if (cd == null) {
-
-                                announcerLogger.warn("Could not find ChannelDels for channel ID {} " + "while resolving game information in guild {}.", channelId, g.getGuild_id());
-
+                                announcerLogger.warn("Could not find ChannelDels for channel ID {} while resolving game information in guild {}.", channelId, g.getGuild_id());
                                 continue;
                             }
 
                             cd.setGame(games.get(String.valueOf(gameId)));
-
+                            cd.setGameID(gameId); // Save new game ID in memory
                             cd.setOffline_flag(0);
-                            cd.setLive(true);
 
-                            if (g.getMessage_style().equals(0)) {
-
-                                cd.setPostID(sendClassicMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle()));
-
+                            if (Boolean.TRUE.equals(cd.getLive())) {
+                                // CHANNEL WAS ALREADY LIVE -> EDIT EXISTING MESSAGE
+                                if (cd.getPostID() != null && cd.getPostID() != 0) {
+                                    if (g.getMessage_style().equals(0)) {
+                                        editClassicMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
+                                    } else {
+                                        editEmbedMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
+                                    }
+                                }
                             } else {
-
-                                cd.setPostID(sendEmbedMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
+                                // CHANNEL JUST WENT LIVE -> CREATE NEW MESSAGE
+                                cd.setLive(true);
+                                if (g.getMessage_style().equals(0)) {
+                                    cd.setPostID(sendClassicMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle()));
+                                } else {
+                                    cd.setPostID(sendEmbedMessage(announceChannel, cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl()));
+                                }
                             }
 
                             dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
-
                             channels.remove(channelId);
                         }
 
                     } catch (Exception e) {
-
                         announcerLogger.error("Error occured in Game check for guild {}.", g.getGuild_id(), e);
-
                         throw e;
                     }
                 }
 
-
                 /*
                  * Remaining channels did not appear in the stream list.
-                 *
-                 * They are either offline or streaming a game that does
-                 * not match the configured filters.
                  */
                 for (ChannelDels cd : channels.values()) {
-
                     if (cd == null) {
                         continue;
                     }
 
                     if (Boolean.TRUE.equals(cd.getLive())) {
-
                         Integer offlineFlag = cd.getOffline_flag();
-
                         if (offlineFlag == null) {
                             offlineFlag = 0;
                         }
 
                         if (offlineFlag < 3) {
-
                             offlineFlag++;
-
                             cd.setOffline_flag(offlineFlag);
-
                             dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 1, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), offlineFlag);
 
                         } else {
-
                             if (!g.getCleanup()) {
-
                                 if (g.getMessage_style().equals(0)) {
-
                                     editClassicOffMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle());
-
                                 } else {
-
                                     editEmbedOffMessage(announceChannel, cd.getPostID(), cd.getName(), cd.getGame(), cd.getTitle(), cd.getIconUrl());
                                 }
-
                                 dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 0, cd.getPostID(), cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
 
                             } else {
-
-                                if (cd.getPostID() != null) {
-
+                                if (cd.getPostID() != null && cd.getPostID() != 0) {
                                     lembot.deleteMessage(announceChannel, cd.getPostID());
                                 }
-
                                 cd.setPostID(null);
-
                                 dbHandler.updateChannelForGuild(g.getGuild_id(), cd.getChannelID(), cd.getName(), 0, 0L, cd.getTitle(), cd.getGame(), cd.getGameID(), 0);
                             }
 
@@ -519,15 +443,12 @@ public class StreamAnnouncer {
             }
 
         } catch (Exception e) {
-
             announcerLogger.error("Due to error iteration of announcer was skipped in guild {}", g.getGuild_id(), e);
 
         } finally {
-
             if (acquired) {
                 streamSemaphore.release();
             }
-
             announcerLogger.info("Announcer for guild {} was successful", g.getGuild_id());
         }
     }
