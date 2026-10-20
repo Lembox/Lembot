@@ -73,12 +73,15 @@ public class StreamAnnouncer {
                 return;
             }
 
-            TextChannel announceChannel = (TextChannel) lembot.getGatewayDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
+            Channel channel = lembot.getGatewayDiscordClient().getChannelById(Snowflake.of(g.getAnnounce_channel())).block();
 
-            if (announceChannel == null) {
-                announcerLogger.warn("Announcement channel {} for guild {} could not be found.", g.getAnnounce_channel(), g.getGuild_id());
+            if (!(channel instanceof TextChannel)) {
+                announcerLogger.warn("Configured announcement channel {} for guild {} is not a valid TextChannel (found: {}).",
+                        g.getAnnounce_channel(), g.getGuild_id(), channel != null ? channel.getClass().getSimpleName() : "null");
                 return;
             }
+
+            TextChannel announceChannel = (TextChannel) channel;
 
             List<ChannelDels> channelDels = g.getTwitch_channels();
             List<String> gameIDs = new ArrayList<>(g.getGame_filters().keySet());
@@ -107,8 +110,7 @@ public class StreamAnnouncer {
             if (!allChannels.isEmpty()) {
 
                 try {
-                    UserList resultUserList = lembot.getUsers(allChannels, null);
-                    List<User> userList = resultUserList.getUsers();
+                    List<User> userList = lembot.getUsers(allChannels, null);
 
                     for (User u : userList) {
                         if (u == null || u.getId() == null) {
@@ -173,8 +175,7 @@ public class StreamAnnouncer {
                  * Check currently active streams.
                  */
                 try {
-                    StreamList resultList = lembot.getStreams(gameIDs, new ArrayList<>(channels.keySet()));
-                    List<Stream> streams = resultList.getStreams();
+                    List<Stream> streams = lembot.getStreams(gameIDs, new ArrayList<>(channels.keySet()));
 
                     for (Stream s : streams) {
                         if (s == null || s.getUserId() == null) {
@@ -348,8 +349,7 @@ public class StreamAnnouncer {
                 if (!setGameFilters && !unfilteredGameIDs.isEmpty()) {
 
                     try {
-                        GameList resultGameList = lembot.getGames(unfilteredGameIDs, null);
-                        List<Game> gameList = resultGameList.getGames();
+                        List<Game> gameList = lembot.getGames(unfilteredGameIDs, null);
 
                         Map<String, String> games = new HashMap<>();
                         for (Game game : gameList) {

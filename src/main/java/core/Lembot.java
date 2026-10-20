@@ -2,10 +2,7 @@ package core;
 
 import com.github.twitch4j.TwitchClient;
 import com.github.twitch4j.TwitchClientBuilder;
-import com.github.twitch4j.helix.domain.Game;
-import com.github.twitch4j.helix.domain.GameList;
-import com.github.twitch4j.helix.domain.StreamList;
-import com.github.twitch4j.helix.domain.UserList;
+import com.github.twitch4j.helix.domain.*;
 
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
@@ -298,21 +295,16 @@ public class Lembot {
 
                     try {
 
-                        GameList games = getGames(null, filterList);
-
-                        if (games != null && games.getGames() != null) {
-
-                            for (Game game : games.getGames()) {
-
+                        List<Game> games = getGames(null, filterList);
+                        if (games != null) {
+                            for (Game game : games) {
                                 if (game.getId() != null) {
-
                                     gameFilters.put(game.getId(), game.getName());
                                 }
                             }
                         }
 
                     } catch (Exception e) {
-
                         logger.error("Error while loading game filters for guild {}", guildId, e);
                     }
                 }
@@ -666,7 +658,7 @@ public class Lembot {
      * -----------------------------------------------------------------
      */
 
-    public UserList getUsers(List<Long> channelIDs, List<String> channelNames) throws Exception {
+    public List<User> getUsers(List<Long> channelIDs, List<String> channelNames) throws Exception {
 
         List<String> userIds = null;
         List<String> userNames = null;
@@ -683,39 +675,106 @@ public class Lembot {
             throw new IllegalArgumentException("No Twitch channel ID or channel name was provided.");
         }
 
-        return twitchClient.getHelix().getUsers(null,       // Twitch4J has to get the OAuth itself
-                userIds, userNames).execute();
+        List<User> allUsers = new ArrayList<>();
+
+        // Batch userIds in chunks of 100
+        if (userIds != null && !userIds.isEmpty()) {
+            for (int i = 0; i < userIds.size(); i += 100) {
+                List<String> batch = userIds.subList(i, Math.min(i + 100, userIds.size()));
+                UserList res = twitchClient.getHelix().getUsers(null, batch, null).execute();
+                if (res != null && res.getUsers() != null) {
+                    allUsers.addAll(res.getUsers());
+                }
+            }
+        }
+
+        // Batch userNames in chunks of 100
+        if (userNames != null && !userNames.isEmpty()) {
+            for (int i = 0; i < userNames.size(); i += 100) {
+                List<String> batch = userNames.subList(i, Math.min(i + 100, userNames.size()));
+                UserList res = twitchClient.getHelix().getUsers(null, null, batch).execute();
+                if (res != null && res.getUsers() != null) {
+                    allUsers.addAll(res.getUsers());
+                }
+            }
+        }
+
+        return allUsers;
     }
 
-    public StreamList getStreams(List<String> gameIDs, List<Long> channelIDs) throws Exception {
+    public List<Stream> getStreams(List<String> gameIDs, List<Long> channelIDs) throws Exception {
 
         List<String> userIds = null;
-
         if (channelIDs != null && !channelIDs.isEmpty()) {
             userIds = channelIDs.stream().map(String::valueOf).toList();
         }
 
-        List<String> validGameIds = null;
+        List<String> validGameIds = (gameIDs != null && !gameIDs.isEmpty()) ? gameIDs : null;
+        List<Stream> allStreams = new ArrayList<>();
 
-        if (gameIDs != null && !gameIDs.isEmpty()) {
-            validGameIds = gameIDs;
+        if (userIds != null && !userIds.isEmpty()) {
+            for (int i = 0; i < userIds.size(); i += 100) {
+                List<String> batch = userIds.subList(i, Math.min(i + 100, userIds.size()));
+                StreamList res = twitchClient.getHelix().getStreams(
+                        null, null, null, null, validGameIds, null, batch, null
+                ).execute();
+
+                if (res != null && res.getStreams() != null) {
+                    allStreams.addAll(res.getStreams());
+                }
+            }
+        } else {
+            StreamList res = twitchClient.getHelix().getStreams(
+                    null, null, null, null, validGameIds, null, null, null
+            ).execute();
+
+            if (res != null && res.getStreams() != null) {
+                allStreams.addAll(res.getStreams());
+            }
         }
 
-        return twitchClient.getHelix().getStreams(null, // default authentification with Twitch4J
-                null,           // after
-                null,           // before
-                null,           // limit
-                validGameIds,   // game IDs
-                null,           // language
-                userIds,        // user IDs
-                null            // user logins
-        ).execute();
+        return allStreams;
     }
 
-    public GameList getGames(List<String> gameIDs, List<String> gameNames) throws Exception {
+    public List<Game> getGames(List<String> gameIDs, List<String> gameNames) throws Exception {
 
-        return twitchClient.getHelix().getGames(null, // default authentification with Twitch4J
-                gameIDs, gameNames).execute();
+        List<String> validGameIds = (gameIDs != null && !gameIDs.isEmpty())
+                ? gameIDs.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList()
+                : null;
+
+        List<String> validGameNames = (gameNames != null && !gameNames.isEmpty())
+                ? gameNames.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList()
+                : null;
+
+        if (validGameIds == null && validGameNames == null) {
+            return Collections.emptyList();
+        }
+
+        List<Game> allGames = new ArrayList<>();
+
+        // Batch game IDs in chunks of 100
+        if (validGameIds != null && !validGameIds.isEmpty()) {
+            for (int i = 0; i < validGameIds.size(); i += 100) {
+                List<String> batch = validGameIds.subList(i, Math.min(i + 100, validGameIds.size()));
+                GameList res = twitchClient.getHelix().getGames(null, batch, null).execute();
+                if (res != null && res.getGames() != null) {
+                    allGames.addAll(res.getGames());
+                }
+            }
+        }
+
+        // Batch game names in chunks of 100
+        if (validGameNames != null && !validGameNames.isEmpty()) {
+            for (int i = 0; i < validGameNames.size(); i += 100) {
+                List<String> batch = validGameNames.subList(i, Math.min(i + 100, validGameNames.size()));
+                GameList res = twitchClient.getHelix().getGames(null, null, batch).execute();
+                if (res != null && res.getGames() != null) {
+                    allGames.addAll(res.getGames());
+                }
+            }
+        }
+
+        return allGames;
     }
 
     /*
