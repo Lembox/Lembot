@@ -176,6 +176,33 @@ public class Commander {
 
                     lembot.sendMessage(channel, stringBuilder.toString());
                     break;
+                case "dm_guild_owner":
+                    // Usage: !dm_guild_owner <guild_id> <message>
+                    if (sender.getId().asLong() == 94888667344015360L) {
+                        String[] parts = arguments.split(" ", 2);
+                        if (parts.length < 2) {
+                            lembot.sendMessage(channel, "Usage: !dm_guild_owner <guild_id> <message>");
+                            break;
+                        }
+
+                        try {
+                            Long targetGuildId = Long.parseLong(parts[0].trim());
+                            String textToSend = parts[1].trim();
+
+                            lembot.getGatewayDiscordClient().getGuildById(Snowflake.of(targetGuildId))
+                                    .flatMap(g -> g.getOwner()
+                                            .flatMap(owner -> owner.getPrivateChannel())
+                                            .flatMap(dm -> dm.createMessage("📩 **Message from the Lembot Developer:**\n\n" + textToSend))
+                                    )
+                                    .subscribe(
+                                            success -> lembot.sendMessage(channel, "Successfully sent DM to the owner of guild `" + targetGuildId + "`!"),
+                                            err -> lembot.sendMessage(channel, "Failed to send DM: " + err.getMessage())
+                                    );
+                        } catch (NumberFormatException e) {
+                            lembot.sendMessage(channel, "Invalid Guild ID.");
+                        }
+                    }
+                    break;
                 case "game_add":
                     try {
                         if (!arguments.equals("")) {

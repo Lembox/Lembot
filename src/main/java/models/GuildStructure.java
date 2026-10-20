@@ -15,6 +15,7 @@ public class GuildStructure {
     private Integer message_style;
     private StreamAnnouncer announcer;
     private Lembot lembot;
+    private Boolean ownerNotified = false; // Tracks if owner was notified about invalid channel
 
     public GuildStructure(Long guild_id, List<ChannelDels> twitch_channels, Map<String, String> game_filters, Long announce_channel, Lembot lembot) {     // for new guilds
         this.guild_id = guild_id;
@@ -24,6 +25,7 @@ public class GuildStructure {
         this.cleanup = false;
         this.message_style = 1;
         this.lembot = lembot;
+        this.ownerNotified = false;
     }
 
     public GuildStructure(Long guild_id, Long announce_channel, Boolean cleanup, Integer message_style) {       // necessary for DB reads
@@ -31,6 +33,7 @@ public class GuildStructure {
         this.announce_channel = announce_channel;
         this.cleanup = cleanup;
         this.message_style = message_style;
+        this.ownerNotified = false;
     }
 
     public Long getGuild_id() {
@@ -55,6 +58,15 @@ public class GuildStructure {
 
     public void setAnnounce_channel(Long announce_channel) {
         this.announce_channel = announce_channel;
+        this.ownerNotified = false; // Reset notification flag when channel is updated
+    }
+
+    public Boolean getOwnerNotified() {
+        return ownerNotified;
+    }
+
+    public void setOwnerNotified(Boolean ownerNotified) {
+        this.ownerNotified = ownerNotified;
     }
 
     public Map<String, String> getGame_filters() {
@@ -143,4 +155,3 @@ public class GuildStructure {
         }
     }
 }
-

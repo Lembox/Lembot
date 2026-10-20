@@ -78,6 +78,28 @@ public class StreamAnnouncer {
             if (!(channel instanceof TextChannel)) {
                 announcerLogger.warn("Configured announcement channel {} for guild {} is not a valid TextChannel (found: {}).",
                         g.getAnnounce_channel(), g.getGuild_id(), channel != null ? channel.getClass().getSimpleName() : "null");
+
+                // Send DM to the server owner once using Discord4J 3.3.3
+                if (!Boolean.TRUE.equals(g.getOwnerNotified())) {
+                    g.setOwnerNotified(true);
+
+                    lembot.getGatewayDiscordClient().getGuildById(Snowflake.of(g.getGuild_id()))
+                            .flatMap(guild -> guild.getOwner()
+                                    .flatMap(owner -> owner.getPrivateChannel())
+                                    .flatMap(dm -> dm.createMessage(
+                                            "⚠️ **Lembot Notification for server: " + guild.getName() + "**\n\n" +
+                                                    "The stream announcement channel is currently set to a **Category header** instead of a real text channel. " +
+                                                    "Because messages cannot be posted in categories, stream announcements are currently paused on your server.\n\n" +
+                                                    "👉 **To fix this:** Go into your server's text channel (e.g. `#streams`) and type:\n" +
+                                                    "`!set_announce #your-channel-name`"
+                                    ))
+                            )
+                            .subscribe(
+                                    msg -> announcerLogger.info("Sent notification DM to owner of guild {}", g.getGuild_id()),
+                                    error -> announcerLogger.warn("Could not DM owner of guild {}: {}", g.getGuild_id(), error.getMessage())
+                            );
+                }
+
                 return;
             }
 
