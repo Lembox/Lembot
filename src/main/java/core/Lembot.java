@@ -91,6 +91,37 @@ public class Lembot {
 
         /*
          * -------------------------------------------------------------
+         * Twitch  (INITIALIZE BEFORE DISCORD & INIT)
+         * -------------------------------------------------------------
+         */
+
+        try {
+
+            String twitchClientId = properties.getProperty("twitch_clientID");
+            String twitchClientSecret = properties.getProperty("twitch_clientSecret");
+
+            if (twitchClientId == null || twitchClientId.isBlank()) {
+                throw new IllegalStateException("twitch_clientID is missing from bot_config.txt");
+            }
+
+            if (twitchClientSecret == null || twitchClientSecret.isBlank()) {
+                throw new IllegalStateException("twitch_clientSecret is missing from bot_config.txt");
+            }
+
+            twitchClient = TwitchClientBuilder.builder()
+                    .withClientId(twitchClientId)
+                    .withClientSecret(twitchClientSecret)
+                    .withEnableHelix(true)
+                    .build();
+
+            logger.info("Twitch client initialized");
+
+        } catch (Exception e) {
+            logger.error("Twitch client could not be set up", e);
+        }
+
+        /*
+         * -------------------------------------------------------------
          * Discord
          * -------------------------------------------------------------
          */
@@ -181,37 +212,6 @@ public class Lembot {
         } catch (Exception e) {
 
             logger.error("Discord client could not be set up", e);
-        }
-
-        /*
-         * -------------------------------------------------------------
-         * Twitch
-         * -------------------------------------------------------------
-         */
-
-        try {
-
-            String twitchClientId = properties.getProperty("twitch_clientID");
-
-            String twitchClientSecret = properties.getProperty("twitch_clientSecret");
-
-            if (twitchClientId == null || twitchClientId.isBlank()) {
-
-                throw new IllegalStateException("twitch_clientID is missing from bot_config.txt");
-            }
-
-            if (twitchClientSecret == null || twitchClientSecret.isBlank()) {
-
-                throw new IllegalStateException("twitch_clientSecret is missing from bot_config.txt");
-            }
-
-            twitchClient = TwitchClientBuilder.builder().withClientId(twitchClientId).withClientSecret(twitchClientSecret).withEnableHelix(true).build();
-
-            logger.info("Twitch client initialized");
-
-        } catch (Exception e) {
-
-            logger.error("Twitch client could not be set up", e);
         }
     }
 
